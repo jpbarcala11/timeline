@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Timeline — protótipo v0.7</title>
+<title>Timeline — protótipo v0.6</title>
 <style>
   :root{
     --bg:#0d0f14; --panel:#141821; --line:#242a36; --txt:#e6e9ef; --dim:#7f8899;
@@ -52,29 +52,6 @@
   .chip.dim{opacity:.28}
   .chip.solo{color:#fff;border-color:#5b6b8f;background:#1b2233}
   .chips-label{font-size:11px;color:#5a6274;margin-right:2px}
-  .chip{transition:opacity .12s}
-  .chip.off{opacity:.3}
-  .chip.off .sw{background:transparent!important;box-shadow:inset 0 0 0 1.5px currentColor}
-  .chip.split{border-color:#4d5876;background:#161c28}
-  .chip.split .sw{width:3px;height:10px;border-radius:1.5px}
-  .chip.drag{opacity:.45}
-  .chip-actions{display:flex;gap:5px;align-items:center;margin-left:auto}
-  .chip-actions button{padding:3px 9px;font-size:11px;border-radius:20px}
-  .chip-link{font-size:11px;color:#6d7688;cursor:pointer;text-decoration:underline;
-  background:none;border:0;padding:3px 4px}
-  .chip-link:hover{color:var(--txt)}
-
-  /* etiqueta discreta de cada linha paralela (some quando é uma linha só) */
-  .laneTag{position:absolute;left:10px;display:flex;gap:9px;z-index:5;pointer-events:auto}
-  .laneTag .lt{font-size:10px;opacity:.5;cursor:grab;letter-spacing:.2px;white-space:nowrap}
-  .laneTag .lt:hover{opacity:1}
-
-  /* faixa realçada enquanto se arrasta um assunto */
-  #laneDrop{position:absolute;left:0;right:0;display:none;z-index:8;pointer-events:none;
-  background:rgba(74,104,168,.07);border-top:1px solid rgba(111,134,187,.35);
-  border-bottom:1px solid rgba(111,134,187,.35)}
-  #laneDrop.on{display:block}
-  #laneDrop.split{background:rgba(63,191,135,.07);border-color:rgba(63,191,135,.4)}
 
   #stage{flex:1;display:flex;min-height:0}
   #canvas{flex:1;position:relative;overflow:hidden;cursor:grab;user-select:none}
@@ -85,15 +62,14 @@
     font-size:11px;color:var(--dim);white-space:nowrap;padding-top:8px;font-variant-numeric:tabular-nums}
   .gridline{position:absolute;top:30px;bottom:0;border-left:1px solid #14181f;pointer-events:none}
 
-  .axis{position:absolute;left:0;right:0;height:2px;background:
-  linear-gradient(90deg,transparent,var(--axis) 4%,var(--axis) 96%,transparent);pointer-events:none;z-index:2}
-  .axisFuture{position:absolute;height:2px;background:repeating-linear-gradient(90deg,#3a4356,#3a4356 5px,transparent 5px,transparent 10px);z-index:3;pointer-events:none}
+  #axis{position:absolute;left:0;right:0;height:2px;background:
+    linear-gradient(90deg,transparent,var(--axis) 4%,var(--axis) 96%,transparent);pointer-events:none;z-index:2}
+  #axisFuture{position:absolute;height:2px;background:repeating-linear-gradient(90deg,#3a4356,#3a4356 5px,transparent 5px,transparent 10px);z-index:3;pointer-events:none}
 
   .leader{position:absolute;width:1px;background:#2c3444;pointer-events:none}
-  .node{position:absolute;transform:translate(-50%,-50%);z-index:4;cursor:pointer;padding:3px 4px}
-  .node .dash{width:3px;height:15px;border-radius:1.5px;box-shadow:0 0 0 1px var(--bg)}
-  .node.tent .dash{background-image:repeating-linear-gradient(180deg,
-  transparent,transparent 3px,var(--bg) 3px,var(--bg) 5px);opacity:.85}
+  .node{position:absolute;transform:translate(-50%,-50%);z-index:4;cursor:pointer}
+  .node .dot{width:11px;height:11px;border-radius:50%;border:2px solid var(--bg);box-sizing:content-box}
+  .node.tent .dot{background:transparent!important;border-style:dashed;border-width:2px}
 
   .span{position:absolute;transform:translateY(-50%);height:8px;border-radius:4px;z-index:3;cursor:pointer;opacity:.9}
   .span.tent{opacity:.75;background-image:repeating-linear-gradient(45deg,rgba(0,0,0,.35),rgba(0,0,0,.35) 4px,transparent 4px,transparent 8px)}
@@ -112,10 +88,9 @@
     border-radius:11px;padding:2px 8px;font-size:10px;color:#aeb8ca;cursor:pointer;z-index:5}
 
   #now{position:absolute;top:30px;bottom:0;width:0;border-left:1px solid rgba(255,77,94,.35);pointer-events:none;z-index:6}
-  #dots{position:absolute;inset:0;pointer-events:none;z-index:7}
-  .nowdot{position:absolute;width:13px;height:13px;border-radius:50%;background:var(--now);
-  transform:translate(-50%,-50%);pointer-events:none;
-  box-shadow:0 0 0 0 rgba(255,77,94,.7);animation:pulse 1.9s infinite}
+  #nowDot{position:absolute;width:13px;height:13px;border-radius:50%;background:var(--now);
+    transform:translate(-50%,-50%);pointer-events:none;z-index:7;
+    box-shadow:0 0 0 0 rgba(255,77,94,.7);animation:pulse 1.9s infinite}
   #nowLbl{position:absolute;transform:translate(-50%,0);font-size:9.5px;letter-spacing:1.2px;
     color:var(--now);pointer-events:none;z-index:7}
   @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(255,77,94,.6)}70%{box-shadow:0 0 0 18px rgba(255,77,94,0)}100%{box-shadow:0 0 0 0 rgba(255,77,94,0)}}
@@ -228,7 +203,7 @@
   kbd{background:#1c2230;border:1px solid var(--line);border-radius:4px;padding:1px 5px;font-size:10px}
 
   @media (prefers-reduced-motion:reduce){
-  .nowdot{animation:none}
+    #nowDot{animation:none}
     .ghost{transition:opacity .2s}
   }
 </style>
@@ -236,7 +211,7 @@
 <body>
 <div id="app">
   <header>
-<div class="brand">Timeline <small>protótipo v0.7</small></div>
+    <div class="brand">Timeline <small>protótipo v0.6</small></div>
     <div class="center-date" id="centerDate"></div>
     <button id="btnNow">◉ Agora</button>
     <button id="btnFit">⤢ Ajustar</button>
@@ -263,9 +238,9 @@
     <div id="canvas">
       <div id="ruler"></div>
       <div id="layers"></div>
-  <div id="now"></div><div id="dots"></div><div id="nowLbl">AGORA</div>
-  <div id="laneDrop"></div>
-  <div id="guide"></div><div id="guideLbl"></div>
+      <div id="axis"></div><div id="axisFuture"></div>
+      <div id="now"></div><div id="nowDot"></div><div id="nowLbl">AGORA</div>
+      <div id="guide"></div><div id="guideLbl"></div>
       <div id="toast"><span class="msg"></span></div>
     </div>
 
@@ -280,9 +255,7 @@
   </div>
 
   <footer>
-  <span class="tip"><b>Arraste um assunto para a linha</b> para separá-lo em uma linha paralela ·
-  arraste-o para cima de outra linha para juntar de novo ·
-  <b>arraste fotos e arquivos</b> — o item vai sozinho para a data do arquivo (EXIF) ·
+    <span class="tip"><b>Arraste fotos e arquivos para a linha</b> — o item vai sozinho para a data do arquivo (EXIF) ·
     solte <b>em cima de um marcador</b> para anexar a ele · <kbd>Shift</kbd> ao soltar usa a posição do cursor ·
     <kbd>scroll</kbd> zoom (década → milissegundo)</span>
     <span id="storageLbl"></span>
@@ -391,57 +364,20 @@ function demoDoc(){
 let TOPICS=[], EVENTS=[];
 
 // ---------- ESTADO ----------
-const state={ center:Date.now(), msPerPx:1000*60*60*24*3/100, follow:false,
-  off:new Set(), lanes:null, selected:null, editorIn:'list' };
+const state={ center:Date.now(), msPerPx:1000*60*60*24*3/100, follow:false, solo:null, selected:null, editorIn:'list' };
 
 const canvas=document.getElementById('canvas'), ruler=document.getElementById('ruler'),
-  layers=document.getElementById('layers'), nowEl=document.getElementById('now'),
-  dotsEl=document.getElementById('dots'), nowLbl=document.getElementById('nowLbl'),
+      layers=document.getElementById('layers'), axis=document.getElementById('axis'),
+      axisF=document.getElementById('axisFuture'), nowEl=document.getElementById('now'),
+      nowDot=document.getElementById('nowDot'), nowLbl=document.getElementById('nowLbl'),
       listEl=document.getElementById('list'), savedLbl=document.getElementById('savedLbl');
 
 const MIN_MSPX=0.02, MAX_MSPX=1.2e9;
 const W=()=>canvas.clientWidth, HGT=()=>canvas.clientHeight;
+const AXIS_Y=()=>30+(HGT()-30)/2;
 const x2t=x=>state.center+(x-W()/2)*state.msPerPx;
 const t2x=t=>(t-state.center)/state.msPerPx+W()/2;
-const isOn=id=>!state.off.has(id);
-const visible=()=>EVENTS.filter(e=>isOn(e.topic));
-
-// ---------- LINHAS PARALELAS ----------
-// state.lanes é uma lista de linhas; cada linha é uma lista de assuntos.
-// Uma linha só, com todos os assuntos dentro, é a visão de origem.
-function normalizeLanes(){
-  const known=new Set(TOPICS.map(t=>t.id)), seen=new Set();
-  let ls=(state.lanes||[]).map(l=>(l||[]).filter(id=>{
-  if(!known.has(id)||seen.has(id)) return false;
-  seen.add(id); return true;
-  })).filter(l=>l.length);
-  const rest=TOPICS.map(t=>t.id).filter(id=>!seen.has(id));
-  if(rest.length){ if(ls.length) ls[0]=ls[0].concat(rest); else ls=[rest]; }
-  if(!ls.length) ls=[TOPICS.map(t=>t.id)];
-  state.lanes=ls;
-}
-// linhas que aparecem de fato (só com os assuntos ligados)
-function visLanes(){
-  normalizeLanes();
-  const ls=state.lanes.map(l=>l.filter(isOn)).filter(l=>l.length);
-  return ls.length?ls:[[]];
-}
-function laneBand(i,n){
-  const h=(HGT()-30)/n;
-  return {top:30+h*i, h, ay:30+h*i+h/2};
-}
-function laneAtY(py){
-  const n=visLanes().length;
-  let i=Math.floor((py-30)/((HGT()-30)/n));
-  i=Math.max(0,Math.min(n-1,i));
-  return Object.assign({i,n},laneBand(i,n));
-}
-function axisYOf(topicId){
-  const ls=visLanes(), n=ls.length;
-  let i=ls.findIndex(l=>l.includes(topicId));
-  if(i<0) i=0;
-  return laneBand(i,n).ay;
-}
+const visible=()=>EVENTS.filter(e=>!state.solo||e.topic===state.solo);
 const topicOf=id=>TOPICS.find(t=>t.id===id)||TOPICS[0];
 const evById=id=>EVENTS.find(e=>e.id===id);
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -453,10 +389,8 @@ function setSaved(txt,cls){ savedLbl.textContent=txt; savedLbl.className='saved'
 
 function serialize(){
   return {
-  format:'timeline', version:6, savedAt:Date.now(),
-  topics:TOPICS.map(t=>({...t})),
-  lanes:(state.lanes||[]).map(l=>l.slice()),
-  off:[...state.off],
+    format:'timeline', version:5, savedAt:Date.now(),
+    topics:TOPICS.map(t=>({...t})),
     events:EVENTS.map(e=>({
       id:e.id, topic:e.topic, title:e.title, t0:e.t0, t1:e.t1,
       status:e.status, kind:e.kind||'', desc:e.desc||'',
@@ -497,9 +431,6 @@ window.addEventListener('beforeunload',ev=>{
 async function hydrate(doc){
   TOPICS=doc.topics&&doc.topics.length?doc.topics:DEFAULT_TOPICS.map(t=>({...t}));
   EVENTS=(doc.events||[]).map(e=>({...e,att:e.att||[]}));
-  state.lanes=Array.isArray(doc.lanes)&&doc.lanes.length?doc.lanes.map(l=>l.slice()):null;
-  state.off=new Set(Array.isArray(doc.off)?doc.off:[]);
-  normalizeLanes();
   // recria as URLs das imagens a partir dos arquivos guardados
   const jobs=[];
   for(const e of EVENTS) for(const a of e.att){
@@ -591,56 +522,23 @@ function fitTo(evs,{withNow=false}={}){
 // ---------- RENDER DA LINHA ----------
 const ROW=26, GAP=14;
 function render(){
-  const w=W(), now=Date.now();
+  const w=W(), now=Date.now(), ay=AXIS_Y();
   if(state.follow) state.center=now;
 
   const {list,step}=ticks();
   let rh='',grid='';
   for(const t of list){
-  const x=t2x(t);
-  rh +=`<div class="tick" style="left:${x}px">${fmtTick(t,step)}</div>`;
-  grid+=`<div class="gridline" style="left:${x}px"></div>`;
+    const x=t2x(t);
+    rh  +=`<div class="tick" style="left:${x}px">${fmtTick(t,step)}</div>`;
+    grid+=`<div class="gridline" style="left:${x}px"></div>`;
   }
   ruler.innerHTML=rh;
 
-  const lanes=visLanes(), n=lanes.length;
+  axis.style.top=ay+'px';
   const nx=Math.max(0,Math.min(w,t2x(now)));
-  const xn=t2x(now);
-  let out=grid;
+  axisF.style.top=ay+'px'; axisF.style.left=nx+'px'; axisF.style.width=Math.max(0,w-nx)+'px';
 
-  syncDots(n);
-  lanes.forEach((ids,li)=>{
-  const {ay}=laneBand(li,n);
-  out+=laneHtml(ids,li,n,w,now);
-  out+=`<div class="axis" style="top:${ay}px"></div>`;
-  out+=`<div class="axisFuture" style="top:${ay}px;left:${nx}px;width:${Math.max(0,w-nx)}px"></div>`;
-  const d=dotsEl.children[li];
-  d.style.left=xn+'px'; d.style.top=ay+'px';
-  });
-  layers.innerHTML=out;
-
-  const lastAy=laneBand(n-1,n).ay;
-  nowEl.style.left=xn+'px';
-  nowLbl.style.left=xn+'px'; nowLbl.style.top=(lastAy+14)+'px';
-
-  document.getElementById('centerDate').textContent=
-  `centro: ${fmtFull(state.center,state.msPerPx<50)} · escala: ${scaleName()}`;
-
-  positionPopover();
-}
-
-function syncDots(n){
-  while(dotsEl.children.length<n){
-  const d=document.createElement('div'); d.className='nowdot'; dotsEl.appendChild(d);
-  }
-  while(dotsEl.children.length>n) dotsEl.lastChild.remove();
-}
-
-// desenha UMA linha. Com uma linha só, é exatamente o desenho da v0.6.
-function laneHtml(ids,li,n,w,now){
-  const band=laneBand(li,n), ay=band.ay;
-  const inLane=new Set(ids);
-  const vis=EVENTS.filter(e=>inLane.has(e.topic))
+  const vis=visible()
     .filter(e=>{const a=t2x(e.t0),b=e.t1?t2x(e.t1):a; return b>-300&&a<w+300;})
     .sort((a,b)=>a.t0-b.t0);
 
@@ -659,14 +557,8 @@ function laneHtml(ids,li,n,w,now){
   flush();
 
   const rowsUp=[],rowsDn=[];
-  const maxRows=Math.max(1,Math.floor((band.h/2-30)/ROW));
-  let html='';
-  if(n>1&&ids.length){
-  html+=`<div class="laneTag" style="top:${ay-13}px">`+ids.map(id=>{
-  const tp=topicOf(id);
-  return `<span class="lt" draggable="true" data-topic="${id}" style="color:${tp.color}">${esc(tp.name)}</span>`;
-  }).join('')+`</div>`;
-  }
+  const maxRows=Math.max(1,Math.floor(((HGT()-30)/2-30)/ROW));
+  let html=grid;
 
   for(const it of items){
     const color=it.type==='ev'?topicOf(it.e.topic).color:'#8a94a8';
@@ -703,12 +595,23 @@ function laneHtml(ids,li,n,w,now){
       html+=`<div class="span${tent}" data-id="${e.id}" style="left:${x0}px;width:${bw}px;top:${ay}px;background:${color}"></div>`;
       html+=`<div class="card${tent}${sel}" data-id="${e.id}" style="left:${x0}px;top:${ly}px;border-left:3px solid ${color}">${label}</div>`;
     }else{
-  html+=`<div class="node${tent}" data-id="${e.id}" style="left:${x0}px;top:${ay}px">
-  <div class="dash" style="background:${color}"></div></div>`;
+      const fill=e.status==='tentative'?'transparent':color;
+      html+=`<div class="node${tent}" data-id="${e.id}" style="left:${x0}px;top:${ay}px">
+               <div class="dot" style="background:${fill};border-color:${e.status==='tentative'?color:'var(--bg)'}"></div></div>`;
       html+=`<div class="card${tent}${sel}" data-id="${e.id}" style="left:${x0+8}px;top:${ly}px;border-left:3px solid ${color}">${label}</div>`;
     }
   }
-  return html;
+  layers.innerHTML=html;
+
+  const xn=t2x(now);
+  nowEl.style.left=xn+'px';
+  nowDot.style.left=xn+'px'; nowDot.style.top=ay+'px';
+  nowLbl.style.left=xn+'px'; nowLbl.style.top=(ay+14)+'px';
+
+  document.getElementById('centerDate').textContent=
+    `centro: ${fmtFull(state.center,state.msPerPx<50)} · escala: ${scaleName()}`;
+
+  positionPopover();
 }
 
 // ---------- LISTA + EDITOR ----------
@@ -720,9 +623,7 @@ function toLocalInput(t){
 function renderList(){
   const now=Date.now();
   const evs=visible().slice().sort((a,b)=>a.t0-b.t0);
-  const on=TOPICS.filter(t=>isOn(t.id));
-  document.getElementById('sideTitle').textContent=
-  on.length===TOPICS.length?'Tudo':on.length===1?on[0].name:on.length?`${on.length} assuntos`:'Nada ligado';
+  document.getElementById('sideTitle').textContent=state.solo?topicOf(state.solo).name:'Tudo';
   document.getElementById('sideCount').textContent=evs.length+' itens';
   listEl.innerHTML='';
   if(!evs.length){
@@ -924,7 +825,7 @@ function positionPopover(){
   const mx=t2x(e.t0);
   if(mx<-60||mx>W()+60){ popEl.style.visibility='hidden'; return; }
   popEl.style.visibility='visible';
-  const x=r.left+mx, ay=r.top+axisYOf(e.topic);
+  const x=r.left+mx, ay=r.top+AXIS_Y();
   const w=popEl.offsetWidth, h=popEl.offsetHeight;
   let left=Math.max(8,Math.min(window.innerWidth-w-8,x-w/2));
   let top=ay+24, below=true;
@@ -958,8 +859,7 @@ listEl.addEventListener('click',ev=>{
 
 // ---------- NOVO ITEM ----------
 document.getElementById('btnAdd').onclick=()=>{
-  const onT=TOPICS.filter(t=>isOn(t.id));
-  const e={ id:uid('e'), topic:(onT.length===1?onT[0].id:(onT[0]||TOPICS[0]).id), title:'Novo item',
+  const e={ id:uid('e'), topic:state.solo||TOPICS[0].id, title:'Novo item',
             t0:Math.round(state.center), t1:null, status:'tentative', kind:'', desc:'', att:[] };
   EVENTS.push(e);
   select(e.id,{center:false});
@@ -971,117 +871,19 @@ document.getElementById('btnAdd').onclick=()=>{
 // ---------- CHIPS ----------
 const chips=document.getElementById('chips');
 function buildChips(){
-  normalizeLanes();
   chips.innerHTML='<span class="chips-label">assuntos:</span>';
-  const sozinho=id=>{ const l=state.lanes.find(l=>l.includes(id)); return l&&l.length===1; };
   TOPICS.forEach(t=>{
-  const c=document.createElement('div');
-  const off=!isOn(t.id), split=state.lanes.length>1&&sozinho(t.id);
-  c.className='chip'+(off?' off':'')+(split?' split':'');
-  c.draggable=true;
-  c.title=off?'ligar este assunto':'desligar · arraste para a linha para separar ou juntar';
-  c.innerHTML=`<span class="sw" style="background:${t.color}"></span>${esc(t.name)}`;
-  c.onclick=()=>{
-  if(isOn(t.id)) state.off.add(t.id); else state.off.delete(t.id);
-  state.selected=null; buildChips(); render(); renderList(); scheduleSave();
-  };
-  c.ondblclick=()=>{
-  state.off=new Set(TOPICS.map(x=>x.id).filter(x=>x!==t.id));
-  state.selected=null; fitTo(visible(),{withNow:true});
-  buildChips(); render(); renderList(); scheduleSave();
-  };
-  c.ondragstart=ev=>{
-  dragTopic=t.id; c.classList.add('drag');
-  ev.dataTransfer.effectAllowed='move';
-  try{ ev.dataTransfer.setData('text/plain',t.name); }catch{}
-  };
-  c.ondragend=()=>{ c.classList.remove('drag'); dragTopic=null; clearLaneDrag(); };
-  chips.appendChild(c);
+    const c=document.createElement('div');
+    c.className='chip'+(state.solo===t.id?' solo':(state.solo?' dim':''));
+    c.innerHTML=`<span class="sw" style="background:${t.color}"></span>${esc(t.name)}`;
+    c.onclick=()=>{ state.solo=state.solo===t.id?null:t.id; state.selected=null;
+      fitTo(visible(),{withNow:!!state.solo}); buildChips(); render(); renderList(); };
+    chips.appendChild(c);
   });
-
-  const acts=document.createElement('div');
-  acts.className='chip-actions';
-  if(state.off.size){
-  const b=document.createElement('button');
-  b.className='chip-link'; b.textContent='ligar todos';
-  b.onclick=()=>{ state.off.clear(); buildChips(); render(); renderList(); scheduleSave(); };
-  acts.appendChild(b);
-  }
-  const bJoin=document.createElement('button');
-  bJoin.textContent='Juntar todos';
-  bJoin.title='Todos os assuntos em uma linha só';
-  bJoin.disabled=state.lanes.length===1;
-  bJoin.onclick=()=>{ state.lanes=[TOPICS.map(t=>t.id)];
-  buildChips(); render(); renderList(); scheduleSave(); };
-  const bSplit=document.createElement('button');
-  bSplit.textContent='Separar todos';
-  bSplit.title='Uma linha paralela para cada assunto';
-  bSplit.disabled=state.lanes.length===TOPICS.length;
-  bSplit.onclick=()=>{ state.lanes=TOPICS.map(t=>[t.id]);
-  buildChips(); render(); renderList(); scheduleSave(); };
-  acts.append(bJoin,bSplit);
-  chips.appendChild(acts);
-}
-
-// ================= ARRASTAR UM ASSUNTO (separar / juntar linhas) =================
-let dragTopic=null, pendingDrop=null;
-const laneDrop=document.getElementById('laneDrop');
-
-function clearLaneDrag(){
-  pendingDrop=null;
-  laneDrop.classList.remove('on','split');
-  guideLbl.classList.remove('on');
-}
-function laneDragOver(ev){
-  const r=canvas.getBoundingClientRect();
-  const px=ev.clientX-r.left, py=ev.clientY-r.top;
-  const lanes=visLanes(), band=laneAtY(py), aqui=lanes[band.i]||[];
-  const meu=aqui.includes(dragTopic);
-  const nomes=l=>l.map(id=>topicOf(id).name).join(', ');
-
-  if(meu&&aqui.length===1) pendingDrop={mode:'nada'};
-  else if(meu) pendingDrop={mode:'separar', lane:band.i, antes:(py-band.top)<band.h/2};
-  else pendingDrop={mode:'juntar', lane:band.i};
-
-  laneDrop.classList.add('on');
-  laneDrop.classList.toggle('split',pendingDrop.mode==='separar');
-  laneDrop.style.top=band.top+'px';
-  laneDrop.style.height=band.h+'px';
-
-  guideLbl.classList.add('on');
-  guideLbl.style.left=px+'px';
-  guideLbl.style.top=(band.ay+42)+'px';
-  const nome=esc(topicOf(dragTopic).name);
-  guideLbl.innerHTML =
-  pendingDrop.mode==='separar' ? `separar<b>${nome} ganha uma linha só sua</b>`
-  : pendingDrop.mode==='juntar' ? `juntar<b>${nome} + ${esc(nomes(aqui))}</b>`
-  : `já está sozinho<b>solte em outra linha para juntar</b>`;
-}
-function applyLaneDrop(){
-  const id=dragTopic, p=pendingDrop;
-  if(!id||!p||p.mode==='nada') return;
-  const eraOff=!isOn(id);
-  state.off.delete(id);
-  normalizeLanes();
-  const lanes=visLanes();
-
-  if(p.mode==='juntar'){
-  const alvo=(lanes[p.lane]||[])[0];
-  const ti=state.lanes.findIndex(l=>l.includes(alvo));
-  if(ti<0) return;
-  state.lanes=state.lanes.map(l=>l.filter(x=>x!==id));
-  state.lanes[ti].push(id);
-  }else{
-  const ancora=(lanes[p.lane]||[]).find(x=>x!==id);
-  state.lanes=state.lanes.map(l=>l.filter(x=>x!==id));
-  let ai=state.lanes.findIndex(l=>l.includes(ancora));
-  if(ai<0) ai=0;
-  state.lanes.splice(p.antes?ai:ai+1,0,[id]);
-  }
-  state.lanes=state.lanes.filter(l=>l.length);
-  normalizeLanes();
-  buildChips(); render(); renderList(); scheduleSave();
-  if(eraOff) showToast(`<b>${esc(topicOf(id).name)}</b> voltou a aparecer.`,[]);
+  const all=document.createElement('div');
+  all.className='chip'+(state.solo?'':' solo'); all.textContent='Tudo';
+  all.onclick=()=>{ state.solo=null; fitTo(EVENTS); buildChips(); render(); renderList(); };
+  chips.appendChild(all);
 }
 
 // ================= ARRASTAR ARQUIVOS PARA A LINHA =================
@@ -1141,17 +943,7 @@ function clearDrag(){
 }
 function hasFiles(ev){ return [...(ev.dataTransfer?.types||[])].includes('Files'); }
 
-canvas.addEventListener('dragstart',ev=>{
-  const lt=ev.target.closest&&ev.target.closest('.lt');
-  if(!lt) return;
-  dragTopic=lt.dataset.topic;
-  ev.dataTransfer.effectAllowed='move';
-  try{ ev.dataTransfer.setData('text/plain',topicOf(dragTopic).name); }catch{}
-});
-canvas.addEventListener('dragend',()=>{ dragTopic=null; clearLaneDrag(); });
-
 canvas.addEventListener('dragover',ev=>{
-  if(dragTopic){ ev.preventDefault(); ev.dataTransfer.dropEffect='move'; laneDragOver(ev); return; }
   if(!hasFiles(ev)) return;
   ev.preventDefault(); ev.dataTransfer.dropEffect='copy';
   canvas.classList.add('dz');
@@ -1167,7 +959,7 @@ canvas.addEventListener('dragover',ev=>{
   guide.style.left=px+'px';
   guideLbl.classList.add('on');
   guideLbl.style.left=px+'px';
-  guideLbl.style.top=(laneAtY(ev.clientY-r.top).ay+42)+'px';
+  guideLbl.style.top=(AXIS_Y()+42)+'px';
   if(tgt){
     const e=evById(tgt.dataset.id);
     guideLbl.innerHTML=`anexar a <b style="display:inline;color:#dde3ee">${esc(e?e.title:'')}</b>`;
@@ -1177,13 +969,9 @@ canvas.addEventListener('dragover',ev=>{
     guideLbl.innerHTML=`soltar aqui<b>o item vai para a data do arquivo</b>`;
   }
 });
-canvas.addEventListener('dragleave',ev=>{
-  if(ev.relatedTarget&&canvas.contains(ev.relatedTarget))return;
-  clearDrag(); clearLaneDrag();
-});
+canvas.addEventListener('dragleave',ev=>{ if(ev.relatedTarget&&canvas.contains(ev.relatedTarget))return; clearDrag(); });
 
 canvas.addEventListener('drop',async ev=>{
-  if(dragTopic){ ev.preventDefault(); applyLaneDrop(); dragTopic=null; clearLaneDrag(); return; }
   if(!hasFiles(ev)) return;
   ev.preventDefault();
   const r=canvas.getBoundingClientRect();
@@ -1209,13 +997,11 @@ canvas.addEventListener('drop',async ev=>{
     const att=await makeAtt(f);
     const isImg=att.type==='image';
     const t=found?found.t:dropT;
-  const ligados=TOPICS.filter(t=>isOn(t.id));
-  const e={ id:uid('e'), topic:(ligados.length===1?ligados[0].id:(isImg?'fotos':'trab')),
+    const e={ id:uid('e'), topic:state.solo||(isImg?'fotos':'trab'),
       title:f.name.replace(/\.[^.]+$/,''), t0:Math.round(t), t1:null,
       status:t<Date.now()?'done':'confirmed', kind:isImg?'foto':'arquivo', desc:'',
       att:[att], _src:found?found.src:'posição do drop', _dropT:dropT };
-  if(!TOPICS.some(tp=>tp.id===e.topic)) e.topic=TOPICS[0].id;
-  state.off.delete(e.topic);
+    if(!TOPICS.some(tp=>tp.id===e.topic)) e.topic=TOPICS[0].id;
     EVENTS.push(e); batch.push(e);
     fly({url:isImg?att.url:null,name:f.name,fromX:px,fromY:py,to:e});
   }
@@ -1249,7 +1035,7 @@ function fly({url,name,fromX,fromY,to}){
   canvas.appendChild(g);
   requestAnimationFrame(()=>requestAnimationFrame(()=>{
     const tx=Math.max(-40,Math.min(W()+40,t2x(to.t0)));
-  g.style.left=tx+'px'; g.style.top=axisYOf(to.topic)+'px';
+    g.style.left=tx+'px'; g.style.top=AXIS_Y()+'px';
     g.style.width='16px'; g.style.height='16px'; g.style.opacity='0';
   }));
   setTimeout(()=>g.remove(),1000);
@@ -1357,8 +1143,7 @@ document.getElementById('miWipe').onclick=async()=>{
   dataMenu.classList.remove('open');
   if(!confirm('Apaga todos os itens e arquivos guardados neste navegador. Não dá para desfazer.\n\nExporte antes, se quiser guardar. Continuar?')) return;
   await dbClear('blobs'); await dbClear('doc');
-  TOPICS=DEFAULT_TOPICS.map(t=>({...t})); EVENTS=[]; state.selected=null;
-  state.off=new Set(); state.lanes=null; normalizeLanes();
+  TOPICS=DEFAULT_TOPICS.map(t=>({...t})); EVENTS=[]; state.selected=null; state.solo=null;
   buildChips(); render(); renderList(); await saveNow();
   showToast('Tudo apagado. A linha está vazia.',[]);
 };
@@ -1377,10 +1162,7 @@ async function refreshStorageLbl(){
 
 // ---------- INTERAÇÃO NA LINHA ----------
 let dragging=false,lastPx=0,moved=0;
-canvas.addEventListener('mousedown',ev=>{
-  if(ev.target.closest&&ev.target.closest('.lt')) return;
-  dragging=true;moved=0;lastPx=ev.clientX;canvas.classList.add('drag');
-});
+canvas.addEventListener('mousedown',ev=>{dragging=true;moved=0;lastPx=ev.clientX;canvas.classList.add('drag')});
 window.addEventListener('mousemove',ev=>{
   if(!dragging)return;
   const dx=ev.clientX-lastPx; lastPx=ev.clientX; moved+=Math.abs(dx);
