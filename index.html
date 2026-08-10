@@ -364,7 +364,12 @@ const dbDel  =(store,key)=>tx(store,'readwrite',s=>s.delete(key));
 const dbKeys =(store)=>tx(store,'readonly', s=>s.getAllKeys());
 const dbClear=(store)=>tx(store,'readwrite',s=>s.clear());
 
-const uid=p=>p+Math.random().toString(36).slice(2,9)+Date.now().toString(36).slice(-4);
+// Precisa ser uuid: a coluna id no Postgres é uuid, e um 'e_ab12x9' faria o
+// salvamento na nuvem falhar com "invalid input syntax for type uuid".
+// O prefixo antigo era só enfeite, então os chamadores seguem iguais.
+const uid=()=> (crypto.randomUUID ? crypto.randomUUID()
+  : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,c=>{
+      const r=Math.random()*16|0; return (c==='x'?r:(r&0x3|0x8)).toString(16); }));
 
 // ---------- MODELO ----------
 const DEFAULT_TOPICS=[
@@ -536,7 +541,9 @@ window.addEventListener('beforeunload',ev=>{
 async function hydrate(doc){
   // O banco usa uuid; o protótipo usava slugs. Converte uma vez, mantendo as
   // referências entre eventos, assuntos e linhas coerentes.
-  if(MODO==='nuvem') doc=nuvem.normalizeDoc(doc);
+  // A semente faz os ids virem do conteúdo, não do acaso: semear o exemplo
+  // duas vezes grava as mesmas linhas em vez de um segundo conjunto paralelo.
+  if(MODO==='nuvem') doc=nuvem.normalizeDoc(doc, USUARIO.id);
   TOPICS=doc.topics&&doc.topics.length?doc.topics:DEFAULT_TOPICS.map(t=>({...t}));
   EVENTS=(doc.events||[]).map(e=>({...e,att:e.att||[]}));
   state.lanes=Array.isArray(doc.lanes)&&doc.lanes.length?doc.lanes.map(l=>l.slice()):null;

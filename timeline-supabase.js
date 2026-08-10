@@ -34,24 +34,52 @@ const novoId = () =>
         return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
       }));
 
+// uuid derivado de um texto: a mesma entrada devolve sempre o mesmo id.
+// É o que torna a semeadura idempotente — semear duas vezes vira upsert das
+// mesmas linhas em vez de um segundo conjunto paralelo.
+function uuidDerivado(texto) {
+  let h = 1779033703 ^ texto.length;
+  for (let i = 0; i < texto.length; i++) {
+    h = Math.imul(h ^ texto.charCodeAt(i), 3432918353);
+    h = (h << 13) | (h >>> 19);
+  }
+  const proximo = () => {
+    h = Math.imul(h ^ (h >>> 16), 2246822507);
+    h = Math.imul(h ^ (h >>> 13), 3266489909);
+    return (h ^= h >>> 16) >>> 0;
+  };
+  const hex = n => n.toString(16).padStart(8, '0');
+  const s = hex(proximo()) + hex(proximo()) + hex(proximo()) + hex(proximo());
+  const variante = '89ab'[parseInt(s[16], 16) % 4];
+  return `${s.slice(0,8)}-${s.slice(8,12)}-4${s.slice(13,16)}-${variante}${s.slice(17,20)}-${s.slice(20,32)}`;
+}
+
 // O banco usa uuid; o protótipo usava slugs ('viagem') e ids curtos ('e_ab12').
-// Isto reescreve os ids antigos e conserta as referências, uma vez só.
-export function normalizeDoc(doc) {
+// Isto reescreve os ids antigos e conserta as referências.
+//
+// Com `semente`, os ids passam a vir do conteúdo em vez do acaso. Semear o
+// exemplo duas vezes (duas abas, um reload no meio do primeiro salvamento)
+// então grava as mesmas linhas, em vez de duplicar tudo.
+export function normalizeDoc(doc, semente) {
   const mapa = new Map();
-  const trocar = id => {
+  const trocar = (id, chave) => {
     if (UUID_RE.test(id)) return id;
-    if (!mapa.has(id)) mapa.set(id, novoId());
+    if (!mapa.has(id)) mapa.set(id, semente ? uuidDerivado(semente + '|' + chave) : novoId());
     return mapa.get(id);
   };
-  const topics = (doc.topics || []).map(t => ({ ...t, id: trocar(t.id) }));
-  const events = (doc.events || []).map(e => ({
-    ...e,
-    id: trocar(e.id),
-    topic: trocar(e.topic),
-    att: (e.att || []).map(a => ({ ...a, id: trocar(a.id) }))
-  }));
-  const lanes = (doc.lanes || []).map(l => l.map(trocar)).filter(l => l.length);
-  const off = (doc.off || []).map(trocar);
+  const topics = (doc.topics || []).map(t => ({ ...t, id: trocar(t.id, 'trilha:' + t.id) }));
+  const events = (doc.events || []).map(e => {
+    const chave = `marcacao:${e.topic}:${e.t0}:${e.title}`;
+    return {
+      ...e,
+      id: trocar(e.id, chave),
+      topic: trocar(e.topic, 'trilha:' + e.topic),
+      att: (e.att || []).map((a, i) =>
+        ({ ...a, id: trocar(a.id, `${chave}:anexo:${a.url || a.name || i}`) }))
+    };
+  });
+  const lanes = (doc.lanes || []).map(l => l.map(id => trocar(id, 'trilha:' + id))).filter(l => l.length);
+  const off = (doc.off || []).map(id => trocar(id, 'trilha:' + id));
   return { ...doc, topics, events, lanes, off };
 }
 
