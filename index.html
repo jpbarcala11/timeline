@@ -737,10 +737,12 @@ function laneHtml(ids,li,n,w,now){
   for(const it of items){
     const color=it.type==='ev'?topicOf(it.e.topic).color:'#8a94a8';
     const x0=it.type==='ev'?t2x(it.e.t0):it.x;
-    const thumb=it.type==='ev'?(it.e.att||[]).find(a=>a.type==='image'&&a.url):null;
+    // Prefere a miniatura: desenhar um card de 16px baixando o original de 3 MB
+    // é exatamente o que a regra da seção 4.1 existe para evitar.
+    const thumb=it.type==='ev'?(it.e.att||[]).find(a=>a.type==='image'&&(a.thumbUrl||a.url)):null;
     const nAtt=it.type==='ev'?(it.e.att||[]).length:0;
     const label=it.type==='ev'
-      ? `${thumb?`<img class="thumb" src="${thumb.url}">`:''}<span>${esc(it.e.title)}</span>`+
+      ? `${thumb?`<img class="thumb" src="${thumb.thumbUrl||thumb.url}">`:''}<span>${esc(it.e.title)}</span>`+
         `${nAtt&&!thumb?`<span class="clip">📎${nAtt}</span>`:''}<span class="t">${fmtShort(it.e.t0)}</span>`
       : `${it.n} itens`;
     const lw=(it.type==='ev'?it.e.title.length*6.1+58+(thumb?20:0)+(nAtt&&!thumb?22:0):52);

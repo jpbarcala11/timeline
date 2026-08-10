@@ -209,7 +209,10 @@ export async function pullDoc() {
     if (!anexosPorMarcacao.has(a.marcacao_id)) anexosPorMarcacao.set(a.marcacao_id, []);
     anexosPorMarcacao.get(a.marcacao_id).push({
       id: a.id,
-      type: a.provider === 'link_externo' ? 'link' : 'file',
+      // O app distingue 'image' de 'file' para decidir o que desenhar. Devolver
+      // sempre 'file' fazia toda foto voltar da nuvem sem miniatura nenhuma.
+      type: a.provider === 'link_externo' ? 'link'
+            : ((a.mime || '').startsWith('image/') ? 'image' : 'file'),
       name: a.metadados?.name ?? (a.ref || '').split('/').pop(),
       url: a.provider === 'link_externo' ? a.ref : undefined,
       mime: a.mime || undefined,
