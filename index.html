@@ -26,6 +26,20 @@
   button.on{background:#2a3a5c;border-color:#4a68a8}
   .zooms{display:flex;gap:4px;flex-wrap:wrap}
   .zooms button{padding:4px 9px}
+  .acct{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--dim)}
+  #loginWrap{position:fixed;inset:0;background:rgba(7,9,13,.82);z-index:100;
+    display:none;align-items:center;justify-content:center}
+  #loginWrap.open{display:flex}
+  #loginBox{background:var(--panel);border:1px solid #39425a;border-radius:12px;
+    padding:22px;width:min(420px,92vw);box-shadow:0 20px 60px rgba(0,0,0,.7)}
+  #loginBox h3{margin:0 0 8px}
+  #loginBox p{margin:0 0 14px;color:var(--dim);font-size:12px;line-height:1.5}
+  #loginBox input{width:100%;padding:9px 11px;border-radius:8px;border:1px solid var(--line);
+    background:#0d0f14;color:var(--txt);font-size:13px}
+  .loginBtns{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+  #loginMsg{margin-top:10px;font-size:11px;color:var(--dim);min-height:14px}
+  #loginMsg.err{color:var(--now)}
+  #loginMsg.ok{color:#3fbf87}
 
   /* ---- estado de gravação + menu de dados ---- */
   .saved{font-size:11px;color:#5a6274;font-variant-numeric:tabular-nums;white-space:nowrap}
@@ -248,14 +262,32 @@
       <div class="menu" id="dataMenu">
         <button id="miExport">Exportar tudo (.json)</button>
         <button id="miImport">Importar de um .json…</button>
-        <div class="note">O arquivo carrega seus itens e as fotos junto — é assim que você leva tudo para outro navegador ou para o celular.</div>
+        <div class="note">O arquivo carrega seus itens e as fotos junto — é assim que você leva tudo para outro navegador, para o celular, ou <b>deste navegador para a nuvem</b>: exporte deslogado, entre na conta e importe.</div>
         <div class="sep"></div>
         <button id="miDemo">Recarregar o exemplo</button>
         <button class="danger" id="miWipe">Apagar tudo deste navegador</button>
       </div>
     </div>
     <div class="zooms" id="zooms"></div>
+    <div class="acct" id="acct">
+      <span id="acctWho"></span>
+      <button id="btnConta">Entrar na nuvem</button>
+    </div>
   </header>
+
+  <div id="loginWrap">
+    <div id="loginBox">
+      <h3>Entrar na nuvem</h3>
+      <p>Seus dados passam a ficar no Supabase, e a mesma linha do tempo abre
+         em qualquer navegador. Sem senha: chega um link no seu e-mail.</p>
+      <input id="loginEmail" type="email" placeholder="seu@email.com" autocomplete="email">
+      <div class="loginBtns">
+        <button id="loginGo">Mandar o link</button>
+        <button id="loginSkip">Continuar só neste navegador</button>
+      </div>
+      <div id="loginMsg"></div>
+    </div>
+  </div>
 
   <div id="chips"><span class="chips-label">assuntos:</span></div>
 
@@ -289,7 +321,13 @@
   </footer>
 </div>
 
-<script>
+<script type="module">
+import * as nuvem from './timeline-supabase.js';
+
+// MODO decide onde os dados vivem nesta sessão:
+//   'nuvem' -> Supabase (P13)     'local' -> IndexedDB, como era antes
+let MODO = 'local', USUARIO = null;
+
 // ================= ARMAZENAMENTO (IndexedDB) =================
 // Os itens e os arquivos ficam guardados neste navegador, neste endereço.
 // Abrir a mesma página de outro endereço (arquivo local vs. site publicado)
@@ -480,7 +518,8 @@ async function saveNow(){
   if(saving){ scheduleSave(); return; }
   saving=true;
   try{
-    await dbPut('doc','current',serialize());
+    if(MODO==='nuvem') await nuvem.pushDoc(serialize());
+    else               await dbPut('doc','current',serialize());
     dirty=false;
     const d=new Date();
     setSaved(`salvo ${p2(d.getHours())}:${p2(d.getMinutes())}`);
@@ -495,19 +534,27 @@ window.addEventListener('beforeunload',ev=>{
 });
 
 async function hydrate(doc){
+  // O banco usa uuid; o protótipo usava slugs. Converte uma vez, mantendo as
+  // referências entre eventos, assuntos e linhas coerentes.
+  if(MODO==='nuvem') doc=nuvem.normalizeDoc(doc);
   TOPICS=doc.topics&&doc.topics.length?doc.topics:DEFAULT_TOPICS.map(t=>({...t}));
   EVENTS=(doc.events||[]).map(e=>({...e,att:e.att||[]}));
   state.lanes=Array.isArray(doc.lanes)&&doc.lanes.length?doc.lanes.map(l=>l.slice()):null;
   state.off=new Set(Array.isArray(doc.off)?doc.off:[]);
   normalizeLanes();
   // recria as URLs das imagens a partir dos arquivos guardados
-  const jobs=[];
-  for(const e of EVENTS) for(const a of e.att){
-    if(a.blobId) jobs.push(dbGet('blobs',a.blobId).then(b=>{ if(b) a.url=URL.createObjectURL(b); else a.missing=true; }));
+  if(MODO==='nuvem'){
+    await nuvem.resolverUrls(EVENTS);
+  }else{
+    const jobs=[];
+    for(const e of EVENTS) for(const a of e.att){
+      if(a.blobId) jobs.push(dbGet('blobs',a.blobId).then(b=>{ if(b) a.url=URL.createObjectURL(b); else a.missing=true; }));
+    }
+    await Promise.all(jobs);
   }
-  await Promise.all(jobs);
 }
 async function collectGarbage(){
+  if(MODO==='nuvem') return;
   const used=new Set();
   for(const e of EVENTS) for(const a of e.att) if(a.blobId) used.add(a.blobId);
   const keys=await dbKeys('blobs');
@@ -885,9 +932,15 @@ function buildEditor(e){
 }
 
 async function makeAtt(f){
+  const tipo=f.type.startsWith('image/')?'image':'file';
+  if(MODO==='nuvem'){
+    const r=await nuvem.enviarArquivo(f, USUARIO.id);
+    return { id:crypto.randomUUID(), type:tipo, name:f.name, size:f.size, mime:f.type,
+             url:URL.createObjectURL(f), _ref:r.ref, _thumb:r.thumbPath, _provider:'supabase' };
+  }
   const id=uid('a');
   await dbPut('blobs',id,f);
-  return { id, blobId:id, type:f.type.startsWith('image/')?'image':'file',
+  return { id, blobId:id, type:tipo,
            name:f.name, size:f.size, mime:f.type, url:URL.createObjectURL(f) };
 }
 
@@ -1319,8 +1372,16 @@ importInput.onchange=async()=>{
   showToast('Importando…',[]);
 
   if(doc.files){
-    for(const [id,dataUrl] of Object.entries(doc.files)){
-      try{ await dbPut('blobs',id,await (await fetch(dataUrl)).blob()); }catch(err){ console.error(err); }
+    if(MODO==='nuvem'){
+      // as fotos do .json vão para o Storage, não para o IndexedDB
+      const r=await nuvem.importarAnexos(doc, USUARIO.id,
+        (i,n)=>showToast(`Enviando anexos… ${i}/${n}`,[]));
+      if(r.falhas) showToast(
+        `${r.enviados} anexo(s) enviados, ${r.falhas} falharam — pode ser o limite de 1 GB do plano grátis.`,[]);
+    }else{
+      for(const [id,dataUrl] of Object.entries(doc.files)){
+        try{ await dbPut('blobs',id,await (await fetch(dataUrl)).blob()); }catch(err){ console.error(err); }
+      }
     }
   }
   const incoming=doc.events.map(e=>({...e,att:e.att||[]}));
@@ -1433,26 +1494,89 @@ document.getElementById('btnNow').onclick=()=>{state.center=Date.now();render();
 document.getElementById('btnFit').onclick=()=>{fitTo(visible(),{withNow:true});render();};
 window.addEventListener('resize',()=>{ render(); positionPopover(); });
 
+// ---------- CONTA ----------
+const loginWrap=document.getElementById('loginWrap'),
+      loginMsg =document.getElementById('loginMsg'),
+      acctWho  =document.getElementById('acctWho'),
+      btnConta =document.getElementById('btnConta');
+
+function pintarConta(){
+  if(USUARIO){ acctWho.textContent=USUARIO.email; btnConta.textContent='Sair'; }
+  else       { acctWho.textContent='só neste navegador'; btnConta.textContent='Entrar na nuvem'; }
+}
+const abrirLogin =()=>{ loginWrap.classList.add('open');
+                        document.getElementById('loginEmail').focus(); };
+const fecharLogin=()=>loginWrap.classList.remove('open');
+
+btnConta.onclick=async()=>{
+  if(!USUARIO) return abrirLogin();
+  if(!confirm('Sair da conta? Os dados continuam no Supabase.')) return;
+  await nuvem.auth.sair(); location.reload();
+};
+document.getElementById('loginSkip').onclick=fecharLogin;
+document.getElementById('loginGo').onclick=async()=>{
+  const email=document.getElementById('loginEmail').value.trim();
+  if(!email) return;
+  loginMsg.className=''; loginMsg.textContent='mandando…';
+  try{
+    await nuvem.auth.entrar(email);
+    loginMsg.className='ok';
+    loginMsg.textContent='Link enviado. Abra o e-mail nesta mesma máquina.';
+  }catch(err){
+    console.error(err);
+    loginMsg.className='err'; loginMsg.textContent=err.message||'não deu certo';
+  }
+};
+document.getElementById('loginEmail').onkeydown=ev=>{
+  if(ev.key==='Enter') document.getElementById('loginGo').click();
+};
+
 // ---------- BOOT ----------
 (async function boot(){
   setSaved('abrindo…','busy');
   let first=false;
+
+  try{ USUARIO=await nuvem.auth.user(); }catch(err){ console.error(err); }
+  MODO = USUARIO ? 'nuvem' : 'local';
+  pintarConta();
+
   try{
-    const doc=await dbGet('doc','current');
-    if(doc&&Array.isArray(doc.events)){ await hydrate(doc); }
-    else { await hydrate(demoDoc()); first=true; }
+    if(MODO==='nuvem'){
+      const doc=await nuvem.pullDoc();
+      if(doc){ await hydrate(doc); }
+      else{
+        // Conta nova começa limpa, de propósito. O que está guardado neste
+        // navegador continua lá, intocado, e só vem para a nuvem se você
+        // mandar: Dados → Exportar, depois Dados → Importar já logado.
+        await hydrate(demoDoc());
+        first=true;
+      }
+    }else{
+      const doc=await dbGet('doc','current');
+      if(doc&&Array.isArray(doc.events)){ await hydrate(doc); }
+      else { await hydrate(demoDoc()); first=true; }
+    }
   }catch(err){
     console.error(err);
     await hydrate(demoDoc()); first=true;
-    setSaved('sem gravação neste navegador','err');
+    setSaved(MODO==='nuvem'?'não consegui ler a nuvem':'sem gravação neste navegador','err');
   }
+
   buildChips(); syncFollow(); render(); renderList();
-  if(first){ await saveNow(); showToast('Agora o que você fizer aqui fica salvo neste navegador.',[]); }
-  else setSaved('salvo');
+  if(first){
+    await saveNow();
+    showToast(MODO==='nuvem'
+      ? 'Pronto. Daqui pra frente tudo fica no Supabase e abre de qualquer navegador.'
+      : 'Agora o que você fizer aqui fica salvo neste navegador.',[]);
+  } else setSaved('salvo');
+
   collectGarbage().catch(console.error);
   refreshStorageLbl();
   try{ if(navigator.storage&&navigator.storage.persist) await navigator.storage.persist(); }catch{}
   setInterval(()=>{ if(state.follow||state.msPerPx<20000) render(); },1000/30);
+
+  // Voltando do link do e-mail, o Supabase troca o token e a sessão aparece aqui.
+  nuvem.auth.aoMudar(u=>{ if(u && !USUARIO) location.reload(); });
 })();
 </script>
 </body>
