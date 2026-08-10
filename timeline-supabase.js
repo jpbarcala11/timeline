@@ -374,6 +374,12 @@ export async function pushDoc(doc) {
   };
 }
 
+export async function baixarArquivo(caminho) {
+  const { data, error } = await sb.storage.from(BUCKET_ORIGINAIS).download(caminho);
+  if (error) { console.error('não consegui baixar', caminho, error); return null; }
+  return data;
+}
+
 // ------------------------------------------------------------- importação --
 // Um .json exportado traz as fotos embutidas em doc.files (blobId -> data URL).
 // No modo nuvem elas precisam ir para o Storage, senão o anexo sobe sem arquivo.

@@ -328,6 +328,11 @@ import * as nuvem from './timeline-supabase.js';
 //   'nuvem' -> Supabase (P13)     'local' -> IndexedDB, como era antes
 let MODO = 'local', USUARIO = null;
 
+// Levantado quando a leitura da nuvem falha. Enquanto estiver de pé, o app não
+// grava NADA — porque gravar em cima de uma leitura que não deu certo é como
+// sobrescrever o arquivo com o que sobrou da memória.
+let BLOQUEADO = false;
+
 // ================= ARMAZENAMENTO (IndexedDB) =================
 // Os itens e os arquivos ficam guardados neste navegador, neste endereço.
 // Abrir a mesma página de outro endereço (arquivo local vs. site publicado)
@@ -509,6 +514,12 @@ function serialize(){
         if(a.mime)   o.mime=a.mime;
         if(a.blobId) o.blobId=a.blobId;
         if(a.type==='link') o.url=a.url;
+        // Sem estes três o anexo chega ao banco sem caminho e é descartado
+        // em silêncio — o arquivo fica órfão no Storage. Foi o que aconteceu
+        // com as primeiras 6 fotos.
+        if(a._ref)      o._ref=a._ref;
+        if(a._thumb)    o._thumb=a._thumb;
+        if(a._provider) o._provider=a._provider;
         return o;
       })
     }))
@@ -520,6 +531,7 @@ function scheduleSave(){
   saveTimer=setTimeout(saveNow,500);
 }
 async function saveNow(){
+  if(BLOQUEADO){ setSaved('não gravo: a leitura falhou','err'); return; }
   if(saving){ scheduleSave(); return; }
   saving=true;
   try{
@@ -1346,9 +1358,16 @@ async function exportJSON(){
   if(withFiles){
     doc.files={};
     for(const e of EVENTS) for(const a of e.att){
-      if(!a.blobId) continue;
-      const b=await dbGet('blobs',a.blobId);
-      if(b) doc.files[a.blobId]=await blobToDataURL(b);
+      let b=null;
+      if(a.blobId) b=await dbGet('blobs',a.blobId);
+      else if(MODO==='nuvem'&&a._ref){
+        // na nuvem o arquivo vem do Storage; o id do anexo vira a chave,
+        // que é o que o importador procura do outro lado
+        b=await nuvem.baixarArquivo(a._ref);
+        if(b){ const alvo=doc.events.find(x=>x.id===e.id)?.att.find(x=>x.id===a.id);
+               if(alvo) alvo.blobId=a.id; }
+      }
+      if(b) doc.files[a.blobId||a.id]=await blobToDataURL(b);
     }
   }
   const blob=new Blob([JSON.stringify(doc)],{type:'application/json'});
@@ -1547,33 +1566,44 @@ document.getElementById('loginEmail').onkeydown=ev=>{
   MODO = USUARIO ? 'nuvem' : 'local';
   pintarConta();
 
-  try{
-    if(MODO==='nuvem'){
-      const doc=await nuvem.pullDoc();
-      if(doc){ await hydrate(doc); }
-      else{
-        // Conta nova começa limpa, de propósito. O que está guardado neste
-        // navegador continua lá, intocado, e só vem para a nuvem se você
-        // mandar: Dados → Exportar, depois Dados → Importar já logado.
-        await hydrate(demoDoc());
-        first=true;
-      }
+  if(MODO==='nuvem'){
+    // O caminho da nuvem é tratado à parte de propósito. Um erro aqui NÃO pode
+    // cair num fallback que carrega o exemplo e o grava: isso substituiria a
+    // sua linha do tempo por dados de mentira. Já aconteceu uma vez.
+    let doc=null, leituraOk=false;
+    try{ doc=await nuvem.pullDoc(); leituraOk=true; }
+    catch(err){ console.error('falha ao ler a nuvem:',err); }
+
+    if(!leituraOk){
+      BLOQUEADO=true;
+      await hydrate({topics:[],events:[],lanes:[],off:[]});
+      setSaved('não consegui ler a nuvem','err');
+      showToast('Não consegui ler seus dados. Não vou gravar nada por cima. Recarregue a página.',[]);
+    }else if(doc){
+      await hydrate(doc);
     }else{
+      // Conta comprovadamente vazia. Começa vazia mesmo — sem exemplo, porque
+      // semear na nuvem foi justamente o que duplicou tudo antes.
+      await hydrate({topics:DEFAULT_TOPICS.map(t=>({...t})),events:[],lanes:[],off:[]});
+      first=true;
+    }
+  }else{
+    try{
       const doc=await dbGet('doc','current');
       if(doc&&Array.isArray(doc.events)){ await hydrate(doc); }
       else { await hydrate(demoDoc()); first=true; }
+    }catch(err){
+      console.error(err);
+      await hydrate(demoDoc()); first=true;
+      setSaved('sem gravação neste navegador','err');
     }
-  }catch(err){
-    console.error(err);
-    await hydrate(demoDoc()); first=true;
-    setSaved(MODO==='nuvem'?'não consegui ler a nuvem':'sem gravação neste navegador','err');
   }
 
   buildChips(); syncFollow(); render(); renderList();
   if(first){
     await saveNow();
     showToast(MODO==='nuvem'
-      ? 'Pronto. Daqui pra frente tudo fica no Supabase e abre de qualquer navegador.'
+      ? 'Conta nova, linha vazia. Crie itens aqui, ou traga o que já tem em Dados → Importar.'
       : 'Agora o que você fizer aqui fica salvo neste navegador.',[]);
   } else setSaved('salvo');
 
