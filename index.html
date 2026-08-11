@@ -136,7 +136,18 @@
 
   /* ---- painel lateral ---- */
   #side{width:330px;flex:none;border-left:1px solid var(--line);background:var(--panel);
-    display:flex;flex-direction:column;min-height:0}
+    display:flex;flex-direction:column;min-height:0;transition:width .18s ease}
+  #side.collapsed{width:0;border-left-color:transparent;overflow:hidden}
+  #side.collapsed>*{display:none}
+
+  /* aba que abre e fecha o painel — mora na borda direita da linha */
+  #sideToggle{position:absolute;right:0;top:50%;transform:translateY(-50%);z-index:9;
+    width:17px;height:54px;padding:0;font-size:12px;line-height:1;color:var(--dim);
+    background:var(--panel);border:1px solid var(--line);border-right:0;
+    border-radius:7px 0 0 7px;cursor:pointer;display:flex;align-items:center;
+    justify-content:center;opacity:.7;box-shadow:-2px 0 8px rgba(0,0,0,.35);
+    transition:opacity .12s,color .12s,background .12s}
+  #sideToggle:hover{opacity:1;color:var(--txt);background:#1e2634}
   .side-head{display:flex;align-items:center;gap:8px;padding:11px 12px;border-bottom:1px solid var(--line)}
   .side-head h2{font-size:13px;margin:0;font-weight:600;flex:1}
   .side-head .cnt{font-size:11px;color:var(--dim)}
@@ -244,6 +255,7 @@
   @media (prefers-reduced-motion:reduce){
   .nowdot{animation:none}
     .ghost{transition:opacity .2s}
+    #side{transition:none}
   }
 </style>
 </head>
@@ -299,6 +311,8 @@
   <div id="laneDrop"></div>
   <div id="guide"></div><div id="guideLbl"></div>
       <div id="toast"><span class="msg"></span></div>
+      <button id="sideToggle" type="button" title="Ocultar painel (P)"
+              aria-label="Ocultar painel" aria-expanded="true" aria-controls="side">›</button>
     </div>
 
     <div id="side">
@@ -316,7 +330,8 @@
   arraste-o para cima de outra linha para juntar de novo ·
   <b>arraste fotos e arquivos</b> — o item vai sozinho para a data do arquivo (EXIF) ·
     solte <b>em cima de um marcador</b> para anexar a ele · <kbd>Shift</kbd> ao soltar usa a posição do cursor ·
-    <kbd>scroll</kbd> zoom (década → milissegundo)</span>
+    <kbd>scroll</kbd> zoom (década → milissegundo) ·
+    <kbd>P</kbd> mostra e esconde o painel</span>
     <span id="storageLbl"></span>
   </footer>
 </div>
@@ -1014,6 +1029,7 @@ function positionPopover(){
 }
 
 function select(id,{center=true,where='list'}={}){
+  if(id!=null&&where==='list') abrirPainel();  // o editor mora no painel: abre se estiver fechado
   state.selected=id;
   state.editorIn=where;
   const e=id!=null?evById(id):null;
@@ -1504,6 +1520,7 @@ window.addEventListener('keydown',ev=>{
   if(ev.key==='-'||ev.key==='_')zoomBy(1.5);
   if(ev.key==='ArrowLeft'){state.center-=W()*.2*state.msPerPx;state.follow=false;syncFollow();render();}
   if(ev.key==='ArrowRight'){state.center+=W()*.2*state.msPerPx;state.follow=false;syncFollow();render();}
+  if((ev.key==='p'||ev.key==='P')&&!ev.ctrlKey&&!ev.metaKey&&!ev.altKey){ ev.preventDefault(); togglePainel(); }
   if(ev.key==='Escape'){ dataMenu.classList.remove('open');
     if(popEl) select(null,{where:'list'}); }
 });
@@ -1521,6 +1538,38 @@ btnFollow.onclick=()=>{state.follow=!state.follow;syncFollow();render();};
 document.getElementById('btnNow').onclick=()=>{state.center=Date.now();render();};
 document.getElementById('btnFit').onclick=()=>{fitTo(visible(),{withNow:true});render();};
 window.addEventListener('resize',()=>{ render(); positionPopover(); });
+
+// ---------- PAINEL LATERAL COLAPSÁVEL ----------
+// Fechado, o painel some e a linha ocupa a largura toda (re-render, não é zoom).
+const sideEl=document.getElementById('side'), sideToggle=document.getElementById('sideToggle');
+const SIDE_KEY='tl_painel_fechado';
+function painelFechado(){ return sideEl.classList.contains('collapsed'); }
+function pintarPainel(){
+  const off=painelFechado();
+  sideToggle.textContent = off ? '‹' : '›';
+  sideToggle.title = (off?'Mostrar painel':'Ocultar painel')+' (P)';
+  sideToggle.setAttribute('aria-label',sideToggle.title);
+  sideToggle.setAttribute('aria-expanded',String(!off));
+}
+// a largura anima; redesenha a cada quadro enquanto isso, senão a linha "pula"
+function redesenharDurante(ms){
+  const fim=performance.now()+ms;
+  (function passo(){ render(); positionPopover();
+    if(performance.now()<fim) requestAnimationFrame(passo); })();
+}
+function togglePainel(fechar){
+  const alvo = (fechar===undefined) ? !painelFechado() : !!fechar;
+  if(alvo===painelFechado()){ pintarPainel(); return; }
+  sideEl.classList.toggle('collapsed',alvo);
+  try{ localStorage.setItem(SIDE_KEY, alvo?'1':'0'); }catch(_){}
+  pintarPainel();
+  redesenharDurante(240);
+}
+function abrirPainel(){ if(painelFechado()) togglePainel(false); }
+sideToggle.addEventListener('click',()=>togglePainel());
+sideToggle.addEventListener('mousedown',ev=>ev.stopPropagation()); // não arrasta a linha
+try{ if(localStorage.getItem(SIDE_KEY)==='1') sideEl.classList.add('collapsed'); }catch(_){}
+pintarPainel();
 
 // ---------- CONTA ----------
 const loginWrap=document.getElementById('loginWrap'),
