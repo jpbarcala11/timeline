@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Timeline — teste de fumaça</title>
+<style>
+  body{background:#0d0f14;color:#e6e9ef;font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+    margin:0;padding:28px;max-width:820px}
+  h1{font-size:18px;margin:0 0 4px} p.sub{color:#7f8899;margin:0 0 22px;font-size:12.5px}
+  .t{border-top:1px solid #242a36;padding:9px 0;display:flex;gap:10px;align-items:baseline}
+  .t .r{font-weight:700;width:56px;flex:0 0 auto}
+  .ok .r{color:#3fbf87} .fail .r{color:#ff4d5e}
+  .t .por{color:#7f8899;font-size:12px;margin-top:2px}
+  #resumo{margin-top:20px;padding:12px 14px;border-radius:9px;font-weight:600}
+  #resumo.ok{background:rgba(63,191,135,.12);border:1px solid #3fbf87;color:#8ee3bb}
+  #resumo.fail{background:rgba(255,77,94,.12);border:1px solid #ff4d5e;color:#ffa0aa}
+  code{background:#171d29;padding:1px 5px;border-radius:4px;font-size:12px}
+</style>
+</head>
+<body>
+<h1>Teste de fumaça — camada de dados</h1>
+<p class="sub">Abra com um servidor HTTP (<code>python3 -m http.server</code>), não por <code>file://</code>:
+   o app é um módulo ES. Cobre <code>normalizeDoc</code>, que é onde os ids são reescritos antes
+   de ir para o Postgres — e onde um erro faz o save inteiro falhar.</p>
+<div id="saida"></div>
+<div id="resumo"></div>
+
+<script type="module">
+import { normalizeDoc } from './timeline-supabase.js';
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+let passou = 0, falhou = 0;
+
+function teste(nome, fn, porque){
+  let ok = false, erro = '';
+  try { fn(); ok = true; } catch(e){ erro = e.message; }
+  ok ? passou++ : falhou++;
+  document.getElementById('saida').insertAdjacentHTML('beforeend',
+    `<div class="t ${ok?'ok':'fail'}"><span class="r">${ok?'passa':'FALHA'}</span>
+       <span>${nome}${ok?'':`<br><span class="por" style="color:#ffa0aa">${erro}</span>`}
+       <div class="por">${porque}</div></span></div>`);
+}
+const eq = (a,b,m)=>{ if(JSON.stringify(a)!==JSON.stringify(b)) throw new Error(`${m}: esperava ${JSON.stringify(b)}, veio ${JSON.stringify(a)}`); };
+const ok = (c,m)=>{ if(!c) throw new Error(m); };
+
+// documento de exemplo com ids curtos, como o protótipo gerava
+const docBase = () => ({
+  topics:[{id:'trab', name:'Trabalho', color:'#f0a83c'}],
+  events:[
+    { id:'h1', topic:'trab', title:'História', t0:1000, t1:2000, status:'confirmed',
+      kind:'', desc:'', att:[], pai:null, estadoItem:'andamento',
+      estimativaMin:480, responsavel:null, entregueEm:null },
+    { id:'t1', topic:'trab', title:'Tarefa', t0:1000, t1:1500, status:'confirmed',
+      kind:'', desc:'', att:[], pai:'h1', estadoItem:'planejado',
+      estimativaMin:240, responsavel:null, entregueEm:null },
+    { id:'m1', topic:'trab', title:'Marcação comum', t0:500, t1:null, status:'done',
+      kind:'foto', desc:'', att:[], pai:null, estadoItem:null,
+      estimativaMin:null, responsavel:null, entregueEm:null }
+  ],
+  lanes:[['trab']], off:[]
+});
+
+teste('ids curtos viram UUID', ()=>{
+  const d = normalizeDoc(docBase(), 'semente');
+  for(const e of d.events) ok(UUID.test(e.id), `id não virou uuid: ${e.id}`);
+  ok(UUID.test(d.topics[0].id), 'id da trilha não virou uuid');
+}, 'A coluna id no Postgres é uuid; um "h1" faz o save falhar com invalid input syntax.');
+
+teste('a tarefa continua apontando para a mãe certa', ()=>{
+  const d = normalizeDoc(docBase(), 'semente');
+  const h = d.events.find(e=>e.title==='História');
+  const t = d.events.find(e=>e.title==='Tarefa');
+  eq(t.pai, h.id, 'pai da tarefa');
+  ok(UUID.test(t.pai), 'pai ficou com o id antigo');
+}, 'Sem religar o pai depois da troca de ids, o insert quebra na chave estrangeira item_pai_id.');
+
+teste('marcação comum não vira item de projeto', ()=>{
+  const d = normalizeDoc(docBase(), 'semente');
+  const m = d.events.find(e=>e.title==='Marcação comum');
+  eq(m.estadoItem, null, 'estadoItem');
+  eq(m.pai, null, 'pai');
+  eq(m.estimativaMin, null, 'estimativaMin');
+}, 'estadoItem nulo é o que separa a Linha da Vida da visão de Projetos.');
+
+teste('campos de projeto sobrevivem à normalização', ()=>{
+  const d = normalizeDoc(docBase(), 'semente');
+  const h = d.events.find(e=>e.title==='História');
+  eq(h.estadoItem, 'andamento', 'estadoItem');
+  eq(h.estimativaMin, 480, 'estimativaMin');
+}, 'normalizeDoc reconstrói os eventos; um spread esquecido apagaria os campos novos.');
+
+teste('mesma semente, mesmos ids (idempotente)', ()=>{
+  const a = normalizeDoc(docBase(), 'mesma'), b = normalizeDoc(docBase(), 'mesma');
+  eq(a.events.map(e=>e.id), b.events.map(e=>e.id), 'ids entre duas execuções');
+}, 'Semear duas vezes (duas abas, um reload no meio) precisa virar upsert, não duplicata.');
+
+teste('uuid que já era uuid não é trocado', ()=>{
+  const d0 = docBase();
+  d0.events[0].id = '11111111-2222-4333-8444-555555555555';
+  d0.events[1].pai = d0.events[0].id;
+  const d = normalizeDoc(d0, 'semente');
+  eq(d.events[0].id, '11111111-2222-4333-8444-555555555555', 'id preservado');
+  eq(d.events[1].pai, '11111111-2222-4333-8444-555555555555', 'pai preservado');
+}, 'Dado que já veio do banco não pode ganhar id novo a cada save — viraria um clone por gravação.');
+
+const r = document.getElementById('resumo');
+r.className = falhou ? 'fail' : 'ok';
+r.textContent = falhou ? `${falhou} teste(s) falharam · ${passou} passaram`
+                       : `Tudo passou — ${passou} testes.`;
+</script>
+</body>
+</html>

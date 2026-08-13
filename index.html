@@ -252,6 +252,47 @@
   footer .tip{flex:1;min-width:240px}
   kbd{background:#1c2230;border:1px solid var(--line);border-radius:4px;padding:1px 5px;font-size:10px}
 
+  /* ---------- VISÃO DE PROJETOS ----------
+     #board mora DENTRO do #canvas, ao lado do #layers. Isso é de propósito:
+     render() só reescreve #layers e #ruler, então o quadro sobrevive ao
+     re-render — e de quebra herda o pan, o zoom, a régua e a linha do AGORA
+     que já existem no canvas. */
+  .views{display:flex;gap:4px}
+  .views button{padding:4px 10px}
+
+  #board{position:absolute;left:0;right:0;top:30px;bottom:0;display:none;
+    overflow-y:auto;overflow-x:hidden;z-index:6}
+  #board.on{display:block}
+  .brow{position:relative;border-bottom:1px solid rgba(36,42,54,.55)}
+  .brow.epico{height:34px;background:rgba(255,255,255,.022)}
+  .brow.hist{height:30px}
+  .brow.tarefa{height:26px;background:rgba(255,255,255,.02)}
+  .brow:hover{background:rgba(255,255,255,.045)}
+  /* a coluna de rótulos não anda com o pan: as barras passam por baixo dela */
+  .blbl{position:absolute;left:0;top:0;height:100%;width:210px;z-index:3;
+    display:flex;align-items:center;gap:6px;padding:0 8px;background:var(--bg);
+    border-right:1px solid var(--line);font-size:12px;white-space:nowrap;overflow:hidden}
+  .brow.epico .blbl{font-weight:600}
+  .brow.hist .blbl{padding-left:22px;color:#c3cad8}
+  .brow.tarefa .blbl{padding-left:38px;color:var(--dim);font-size:11.5px}
+  .blbl .nome{overflow:hidden;text-overflow:ellipsis}
+  .bexp{background:none;border:0;color:var(--dim);cursor:pointer;padding:0;width:14px;
+    font-size:10px;line-height:1;flex:0 0 auto}
+  .bexp.open{transform:rotate(90deg)}
+  .bdot{width:8px;height:8px;border-radius:50%;flex:0 0 auto}
+  .bbar{position:absolute;top:50%;transform:translateY(-50%);height:15px;border-radius:8px;
+    min-width:7px;cursor:pointer;border:1.5px solid var(--c);
+    background:color-mix(in srgb,var(--c) 25%,transparent)}
+  .brow.tarefa .bbar{height:10px;border-radius:5px}
+  .bbar.andamento{background:color-mix(in srgb,var(--c) 55%,transparent)}
+  .bbar.entregue{background:var(--c);opacity:.9}
+  .bbar.atrasado{border-style:dashed;border-color:var(--now)}
+  .bbar.sel{outline:2px solid #fff;outline-offset:2px}
+  .brastro{position:absolute;top:50%;height:0;border-top:2px dashed var(--now);opacity:.85;
+    pointer-events:none}
+  .bvazio{padding:26px 20px 26px 220px;color:var(--dim);font-size:12.5px;line-height:1.6}
+  .bvazio b{color:var(--txt)}
+
   @media (prefers-reduced-motion:reduce){
   .nowdot{animation:none}
     .ghost{transition:opacity .2s}
@@ -263,6 +304,10 @@
 <div id="app">
   <header>
 <div class="brand">Timeline <small>protótipo v0.7</small></div>
+    <div class="views" id="views">
+      <button data-view="timeline" class="on">Linha da Vida</button>
+      <button data-view="projetos">Projetos</button>
+    </div>
     <div class="center-date" id="centerDate"></div>
     <button id="btnNow">◉ Agora</button>
     <button id="btnFit">⤢ Ajustar</button>
@@ -307,6 +352,7 @@
     <div id="canvas">
       <div id="ruler"></div>
       <div id="layers"></div>
+      <div id="board"></div>
   <div id="now"></div><div id="dots"></div><div id="nowLbl">AGORA</div>
   <div id="laneDrop"></div>
   <div id="guide"></div><div id="guideLbl"></div>
@@ -392,6 +438,26 @@ const uid=()=> (crypto.randomUUID ? crypto.randomUUID()
       const r=Math.random()*16|0; return (c==='x'?r:(r&0x3|0x8)).toString(16); }));
 
 // ---------- MODELO ----------
+// Fábrica única de evento. Antes o objeto literal era montado em três lugares
+// (exemplo, botão +, drop de arquivo) e cada campo novo tinha que ser lembrado
+// nos três. Agora só aqui — e o que não passar por aqui não existe.
+//
+// Os cinco últimos campos são da VISÃO DE PROJETOS e ficam nulos numa marcação
+// comum. `estadoItem` é o discriminador: preenchido = item de projeto.
+function criarEvento(d={}){
+  return {
+    id: d.id||uid('e'), topic:d.topic, title:d.title||'Novo item',
+    t0: d.t0, t1: d.t1??null,
+    status: d.status||'tentative', kind:d.kind||'', desc:d.desc||'',
+    att: d.att||[],
+    pai:           d.pai??null,            // tarefa aponta para a história-mãe
+    estadoItem:    d.estadoItem??null,     // backlog|planejado|andamento|entregue
+    estimativaMin: d.estimativaMin??null,  // previsão de esforço em minutos
+    responsavel:   d.responsavel??null,
+    entregueEm:    d.entregueEm??null      // entrega real; t1 é a prevista
+  };
+}
+const ehItem = e => !!e.estadoItem;
 const DEFAULT_TOPICS=[
   {id:'viagem',name:'Viagem à Califórnia',color:'#5b8dee'},
   {id:'fotos', name:'Fotos',              color:'#b06fe0'},
@@ -443,9 +509,9 @@ function demoDoc(){
   ];
   return {
     topics:DEFAULT_TOPICS.map(t=>({...t})),
-    events:raw.map(e=>({
-      id:uid('e'), topic:e.topic, title:e.title, t0:D(e.t), t1:e.end?D(e.end):null,
-      status:e.status, kind:e.kind||'', desc:e.desc||'',
+    events:raw.map(e=>criarEvento({
+      topic:e.topic, title:e.title, t0:D(e.t), t1:e.end?D(e.end):null,
+      status:e.status, kind:e.kind, desc:e.desc,
       att:(e.att||[]).map(a=>({...a,id:uid('a')}))
     }))
   };
@@ -455,7 +521,10 @@ let TOPICS=[], EVENTS=[];
 
 // ---------- ESTADO ----------
 const state={ center:Date.now(), msPerPx:1000*60*60*24*3/100, follow:false,
-  off:new Set(), lanes:null, selected:null, editorIn:'list' };
+  off:new Set(), lanes:null, selected:null, editorIn:'list',
+  // visão atual e o que ela precisa lembrar. Fica no localStorage, não no doc:
+  // é preferência deste navegador, não dado da linha do tempo.
+  view:'timeline', abertos:new Set(), itensNaLinha:false };
 
 const canvas=document.getElementById('canvas'), ruler=document.getElementById('ruler'),
   layers=document.getElementById('layers'), nowEl=document.getElementById('now'),
@@ -467,7 +536,11 @@ const W=()=>canvas.clientWidth, HGT=()=>canvas.clientHeight;
 const x2t=x=>state.center+(x-W()/2)*state.msPerPx;
 const t2x=t=>(t-state.center)/state.msPerPx+W()/2;
 const isOn=id=>!state.off.has(id);
-const visible=()=>EVENTS.filter(e=>isOn(e.topic));
+// Itens de projeto ficam FORA da Linha da Vida por padrão: "ajustar CSS" e
+// "viagem à Califórnia" na mesma linha polui a visão pessoal. O chip
+// "itens de projeto" traz de volta quem quiser ver tudo junto.
+const naLinha=e=>state.itensNaLinha||!ehItem(e);
+const visible=()=>EVENTS.filter(e=>isOn(e.topic)&&naLinha(e));
 
 // ---------- LINHAS PARALELAS ----------
 // state.lanes é uma lista de linhas; cada linha é uma lista de assuntos.
@@ -516,13 +589,19 @@ function setSaved(txt,cls){ savedLbl.textContent=txt; savedLbl.className='saved'
 
 function serialize(){
   return {
-  format:'timeline', version:6, savedAt:Date.now(),
+  format:'timeline', version:7, savedAt:Date.now(),
   topics:TOPICS.map(t=>({...t})),
   lanes:(state.lanes||[]).map(l=>l.slice()),
   off:[...state.off],
     events:EVENTS.map(e=>({
       id:e.id, topic:e.topic, title:e.title, t0:e.t0, t1:e.t1,
       status:e.status, kind:e.kind||'', desc:e.desc||'',
+      // Campos da visão de projetos. Esta lista é uma WHITELIST: campo que não
+      // estiver aqui some no primeiro save, em silêncio — foi assim que as
+      // primeiras 6 fotos se perderam (ver comentário logo abaixo).
+      pai:e.pai??null, estadoItem:e.estadoItem??null,
+      estimativaMin:e.estimativaMin??null, responsavel:e.responsavel??null,
+      entregueEm:e.entregueEm??null,
       att:(e.att||[]).map(a=>{
         const o={id:a.id,type:a.type,name:a.name};
         if(a.size)   o.size=a.size;
@@ -572,7 +651,9 @@ async function hydrate(doc){
   // duas vezes grava as mesmas linhas em vez de um segundo conjunto paralelo.
   if(MODO==='nuvem') doc=nuvem.normalizeDoc(doc, USUARIO.id);
   TOPICS=doc.topics&&doc.topics.length?doc.topics:DEFAULT_TOPICS.map(t=>({...t}));
-  EVENTS=(doc.events||[]).map(e=>({...e,att:e.att||[]}));
+  // criarEvento normaliza: doc antigo (v6, sem os campos de projeto) entra com
+  // eles nulos e continua sendo exatamente a marcação que era.
+  EVENTS=(doc.events||[]).map(e=>criarEvento({...e,att:e.att||[]}));
   state.lanes=Array.isArray(doc.lanes)&&doc.lanes.length?doc.lanes.map(l=>l.slice()):null;
   state.off=new Set(Array.isArray(doc.off)?doc.off:[]);
   normalizeLanes();
@@ -684,9 +765,23 @@ function render(){
   }
   ruler.innerHTML=rh;
 
-  const lanes=visLanes(), n=lanes.length;
   const nx=Math.max(0,Math.min(w,t2x(now)));
   const xn=t2x(now);
+
+  // A visão de projetos compartilha régua, pan, zoom e a linha do AGORA; o que
+  // muda é só o que se desenha abaixo da régua.
+  if(state.view==='projetos'){
+    syncDots(0);
+    layers.innerHTML=grid;          // as verticais do calendário continuam valendo
+    renderBoard(now);
+    nowEl.style.left=xn+'px';
+    nowLbl.style.left=xn+'px'; nowLbl.style.top='';
+    document.getElementById('centerDate').textContent=
+      `centro: ${fmtFull(state.center,state.msPerPx<50)} · escala: ${scaleName()}`;
+    return;
+  }
+
+  const lanes=visLanes(), n=lanes.length;
   let out=grid;
 
   syncDots(n);
@@ -721,7 +816,7 @@ function syncDots(n){
 function laneHtml(ids,li,n,w,now){
   const band=laneBand(li,n), ay=band.ay;
   const inLane=new Set(ids);
-  const vis=EVENTS.filter(e=>inLane.has(e.topic))
+  const vis=EVENTS.filter(e=>inLane.has(e.topic)&&naLinha(e))
     .filter(e=>{const a=t2x(e.t0),b=e.t1?t2x(e.t1):a; return b>-300&&a<w+300;})
     .sort((a,b)=>a.t0-b.t0);
 
@@ -794,6 +889,107 @@ function laneHtml(ids,li,n,w,now){
   return html;
 }
 
+// ---------- VISÃO DE PROJETOS ----------
+// Hierarquia: trilha (épico) → história → tarefa. Uma história é um item cujo
+// `pai` é nulo; a tarefa aponta para a história. O épico é a trilha de sempre,
+// porque "uma linha por assunto" já era a ideia do app desde o começo.
+const boardEl=document.getElementById('board');
+const itens      = ()=>EVENTS.filter(ehItem);
+const historiasDe= tid=>itens().filter(e=>e.topic===tid&&!e.pai).sort((a,b)=>a.t0-b.t0);
+const tarefasDe  = id =>itens().filter(e=>e.pai===id).sort((a,b)=>a.t0-b.t0);
+const fimDeItem  = e =>e.entregueEm||e.t1||(e.t0+(e.estimativaMin||480)*60000);
+const atrasado   = e =>e.estadoItem&&e.estadoItem!=='entregue'&&e.estadoItem!=='backlog'
+                       &&fimDeItem(e)<Date.now();
+const fmtEstim   = min=>min<480?Math.round(min/60)+'h'
+                       :min%2400===0?(min/2400)+'sem':(min/480)+'d';
+
+function renderBoard(now){
+  const comItens=TOPICS.filter(t=>isOn(t.id)&&historiasDe(t.id).length);
+  if(!comItens.length){
+    boardEl.innerHTML=`<div class="bvazio">Nenhum item de projeto ainda.<br>
+      Use o <b>+</b> do painel para criar uma história — ela nasce no assunto ligado,
+      já planejada e com 1 dia de previsão.<br>
+      Épicos são os <b>assuntos</b> que você já tem; histórias e tarefas moram dentro deles.</div>`;
+    return;
+  }
+  const linhas=[];
+  for(const tp of comItens){
+    linhas.push({nivel:'epico', tp, aberto:!state.abertos.has('x:'+tp.id)});
+    if(state.abertos.has('x:'+tp.id)) continue;         // épico recolhido
+    for(const h of historiasDe(tp.id)){
+      const ts=tarefasDe(h.id);
+      linhas.push({nivel:'hist', e:h, tp, temFilhos:ts.length, aberto:state.abertos.has(h.id)});
+      if(state.abertos.has(h.id)) for(const t of ts) linhas.push({nivel:'tarefa', e:t, tp});
+    }
+  }
+
+  const barra=(e,tp)=>{
+    const x0=t2x(e.t0), x1=t2x(fimDeItem(e));
+    const atr=atrasado(e);
+    const cls=['bbar',e.estadoItem,atr?'atrasado':'',state.selected===e.id?'sel':'']
+      .filter(Boolean).join(' ');
+    let h=`<div class="${cls}" data-id="${e.id}" title="${esc(e.title)} · ${
+      e.estimativaMin?fmtEstim(e.estimativaMin):'sem previsão'}${atr?' · ATRASADO':''}"
+      style="left:${x0}px;width:${Math.max(7,x1-x0)}px;--c:${tp.color}"></div>`;
+    if(atr){
+      const xn=t2x(now);
+      h+=`<div class="brastro" style="left:${x1}px;width:${Math.max(2,xn-x1)}px"></div>`;
+    }
+    return h;
+  };
+
+  boardEl.innerHTML=linhas.map(l=>{
+    if(l.nivel==='epico'){
+      const rec=state.abertos.has('x:'+l.tp.id);
+      const hs=historiasDe(l.tp.id);
+      return `<div class="brow epico">
+        <div class="blbl">
+          <button class="bexp${rec?'':' open'}" data-exp="x:${l.tp.id}">▶</button>
+          <span class="bdot" style="background:${l.tp.color}"></span>
+          <span class="nome">${esc(l.tp.name)}</span>
+        </div>${rec?hs.map(h=>barra(h,l.tp)).join(''):''}</div>`;
+    }
+    const e=l.e;
+    const seta=l.nivel==='hist'&&l.temFilhos
+      ? `<button class="bexp${l.aberto?' open':''}" data-exp="${e.id}">▶</button>`
+      : '<span style="width:14px;flex:0 0 auto"></span>';
+    return `<div class="brow ${l.nivel==='hist'?'hist':'tarefa'}">
+      <div class="blbl">${seta}<span class="nome">${esc(e.title)}</span></div>
+      ${barra(e,l.tp)}</div>`;
+  }).join('');
+}
+
+// Recolher/expandir. O clique não pode virar pan nem seleção.
+boardEl.addEventListener('mousedown',ev=>{ if(ev.target.closest('.bexp')) ev.stopPropagation(); });
+boardEl.addEventListener('click',ev=>{
+  const b=ev.target.closest('.bexp');
+  if(b){ ev.stopPropagation();
+    const k=b.dataset.exp;
+    state.abertos.has(k)?state.abertos.delete(k):state.abertos.add(k);
+    render(); return;
+  }
+  const bar=ev.target.closest('.bbar');
+  if(bar){ ev.stopPropagation(); select(bar.dataset.id,{center:false,where:'list'}); }
+});
+
+function pintarViews(){
+  document.querySelectorAll('#views button').forEach(b=>
+    b.classList.toggle('on',b.dataset.view===state.view));
+  boardEl.classList.toggle('on',state.view==='projetos');
+  document.getElementById('chips').style.display=state.view==='projetos'?'none':'';
+}
+function trocarView(v){
+  if(v===state.view) return;
+  state.view=v;
+  if(popEl) select(null,{where:'list'});      // o popover ancora na lane; some
+  try{ localStorage.setItem('tl_view',v); }catch(_){}
+  pintarViews(); render(); renderList();
+}
+document.getElementById('views').addEventListener('click',ev=>{
+  const b=ev.target.closest('button'); if(b) trocarView(b.dataset.view);
+});
+try{ const v=localStorage.getItem('tl_view'); if(v==='projetos') state.view=v; }catch(_){}
+
 // ---------- LISTA + EDITOR ----------
 function toLocalInput(t){
   if(t==null)return'';
@@ -802,14 +998,17 @@ function toLocalInput(t){
 }
 function renderList(){
   const now=Date.now();
-  const evs=visible().slice().sort((a,b)=>a.t0-b.t0);
+  const proj=state.view==='projetos';
+  const evs=(proj?itens().filter(e=>isOn(e.topic)):visible()).slice().sort((a,b)=>a.t0-b.t0);
   const on=TOPICS.filter(t=>isOn(t.id));
-  document.getElementById('sideTitle').textContent=
+  document.getElementById('sideTitle').textContent= proj ? 'Itens do projeto' :
   on.length===TOPICS.length?'Tudo':on.length===1?on[0].name:on.length?`${on.length} assuntos`:'Nada ligado';
   document.getElementById('sideCount').textContent=evs.length+' itens';
   listEl.innerHTML='';
   if(!evs.length){
-    listEl.innerHTML='<div class="empty">Nada aqui ainda.<br>Use o <b>+</b> para criar um item, ou arraste uma foto para a linha.</div>';
+    listEl.innerHTML= proj
+      ? '<div class="empty">Nenhum item de projeto ainda.<br>Use o <b>+</b> para criar a primeira história.</div>'
+      : '<div class="empty">Nada aqui ainda.<br>Use o <b>+</b> para criar um item, ou arraste uma foto para a linha.</div>';
     return;
   }
 
@@ -848,6 +1047,23 @@ function buildEditor(e){
       <div><label>Início</label><input id="eStart" type="datetime-local" step="1" value="${toLocalInput(e.t0)}"></div>
       <div><label>Fim (opcional)</label><input id="eEnd" type="datetime-local" step="1" value="${toLocalInput(e.t1)}"></div>
     </div>
+    ${ehItem(e)?`
+    <div class="erow">
+      <div><label>Estado do item</label><select id="eEstadoItem">${
+        [['backlog','Backlog'],['planejado','Planejado'],['andamento','Em andamento'],['entregue','Entregue']]
+        .map(([v,r])=>`<option value="${v}"${e.estadoItem===v?' selected':''}>${r}</option>`).join('')
+      }</select></div>
+      <div><label>Previsão de esforço</label><select id="eEstim">${
+        [120,240,480,960,1440,2400,4800]
+        .map(v=>`<option value="${v}"${e.estimativaMin===v?' selected':''}>${fmtEstim(v)}</option>`).join('')
+      }${[120,240,480,960,1440,2400,4800].includes(e.estimativaMin)?'':
+         `<option value="${e.estimativaMin||480}" selected>${fmtEstim(e.estimativaMin||480)}</option>`}</select></div>
+    </div>
+    <label>História-mãe</label><select id="ePai">
+      <option value="">— é uma história (sem mãe)</option>${
+        itens().filter(h=>!h.pai&&h.id!==e.id)
+          .map(h=>`<option value="${h.id}"${e.pai===h.id?' selected':''}>${esc(h.title)}</option>`).join('')
+      }</select>`:''}
     <label>Tipo</label><input id="eKind" value="${esc(e.kind||'')}" placeholder="foto, voo, nota…">
     <label>Detalhes</label><textarea id="eDesc" placeholder="Anotações…">${esc(e.desc||'')}</textarea>
     <label>Anexos</label>
@@ -895,9 +1111,26 @@ function buildEditor(e){
     }
     e.topic=ev.target.value; touch(); buildChips();
   };
+  if(ehItem(e)){
+    $('#eEstadoItem').onchange=ev=>{
+      e.estadoItem=ev.target.value;
+      // Entregue registra a data real; reabrir apaga, senão a barra fica
+      // congelada na entrega antiga.
+      e.entregueEm = e.estadoItem==='entregue' ? Date.now() : null;
+      touch();
+    };
+    $('#eEstim').onchange=ev=>{
+      e.estimativaMin=+ev.target.value;
+      // Sem fim explícito, a barra é início + previsão: mexer na previsão move o fim.
+      touch();
+    };
+    $('#ePai').onchange=ev=>{ e.pai=ev.target.value||null; touch(); };
+  }
   $('#eDel').onclick=async()=>{
     const ids=e.att.filter(a=>a.blobId).map(a=>a.blobId);
-    EVENTS=EVENTS.filter(x=>x.id!==e.id); state.selected=null;
+    // história excluída leva as tarefas junto — senão elas viram órfãs invisíveis
+    const filhos=new Set(tarefasDe(e.id).map(t=>t.id));
+    EVENTS=EVENTS.filter(x=>x.id!==e.id&&!filhos.has(x.id)); state.selected=null;
     closePopover();
     render(); renderList(); scheduleSave();
     for(const b of ids) await dbDel('blobs',b);
@@ -1049,8 +1282,14 @@ listEl.addEventListener('click',ev=>{
 // ---------- NOVO ITEM ----------
 document.getElementById('btnAdd').onclick=()=>{
   const onT=TOPICS.filter(t=>isOn(t.id));
-  const e={ id:uid('e'), topic:(onT.length===1?onT[0].id:(onT[0]||TOPICS[0]).id), title:'Novo item',
-            t0:Math.round(state.center), t1:null, status:'tentative', kind:'', desc:'', att:[] };
+  const base={ topic:(onT.length===1?onT[0].id:(onT[0]||TOPICS[0]).id),
+               t0:Math.round(state.center), status:'tentative' };
+  // Na visão de projetos o + cria uma história já planejada, com 1 dia de
+  // previsão — não um marcador solto.
+  const e = state.view==='projetos'
+    ? criarEvento({...base, title:'Nova história', t1:Math.round(state.center)+DAY,
+                   estadoItem:'planejado', estimativaMin:480, status:'confirmed'})
+    : criarEvento({...base, title:'Novo item'});
   EVENTS.push(e);
   select(e.id,{center:false});
   scheduleSave();
@@ -1110,8 +1349,20 @@ function buildChips(){
   bSplit.onclick=()=>{ state.lanes=TOPICS.map(t=>[t.id]);
   buildChips(); render(); renderList(); scheduleSave(); };
   acts.append(bJoin,bSplit);
+  // Só aparece quando existe item de projeto — não polui quem só usa a linha da vida.
+  if(itens().length){
+    const bItens=document.createElement('button');
+    bItens.textContent='itens de projeto';
+    bItens.title='Mostrar histórias e tarefas também na Linha da Vida';
+    bItens.classList.toggle('on',state.itensNaLinha);
+    bItens.onclick=()=>{ state.itensNaLinha=!state.itensNaLinha;
+      try{ localStorage.setItem('tl_itens_na_linha',state.itensNaLinha?'1':'0'); }catch(_){}
+      buildChips(); render(); renderList(); };
+    acts.appendChild(bItens);
+  }
   chips.appendChild(acts);
 }
+try{ if(localStorage.getItem('tl_itens_na_linha')==='1') state.itensNaLinha=true; }catch(_){}
 
 // ================= ARRASTAR UM ASSUNTO (separar / juntar linhas) =================
 let dragTopic=null, pendingDrop=null;
@@ -1300,10 +1551,11 @@ canvas.addEventListener('drop',async ev=>{
     const isImg=att.type==='image';
     const t=found?found.t:dropT;
   const ligados=TOPICS.filter(t=>isOn(t.id));
-  const e={ id:uid('e'), topic:(ligados.length===1?ligados[0].id:(isImg?'fotos':'trab')),
-      title:f.name.replace(/\.[^.]+$/,''), t0:Math.round(t), t1:null,
-      status:t<Date.now()?'done':'confirmed', kind:isImg?'foto':'arquivo', desc:'',
-      att:[att], _src:found?found.src:'posição do drop', _dropT:dropT };
+  const e=criarEvento({ topic:(ligados.length===1?ligados[0].id:(isImg?'fotos':'trab')),
+      title:f.name.replace(/\.[^.]+$/,''), t0:Math.round(t),
+      status:t<Date.now()?'done':'confirmed', kind:isImg?'foto':'arquivo',
+      att:[att] });
+  e._src=found?found.src:'posição do drop'; e._dropT=dropT;
   if(!TOPICS.some(tp=>tp.id===e.topic)) e.topic=TOPICS[0].id;
   state.off.delete(e.topic);
     EVENTS.push(e); batch.push(e);
@@ -1536,7 +1788,11 @@ const btnFollow=document.getElementById('btnFollow');
 function syncFollow(){btnFollow.classList.toggle('on',state.follow);}
 btnFollow.onclick=()=>{state.follow=!state.follow;syncFollow();render();};
 document.getElementById('btnNow').onclick=()=>{state.center=Date.now();render();};
-document.getElementById('btnFit').onclick=()=>{fitTo(visible(),{withNow:true});render();};
+document.getElementById('btnFit').onclick=()=>{
+  const alvo=state.view==='projetos'?itens().filter(e=>isOn(e.topic)):visible();
+  fitTo(alvo.map(e=>state.view==='projetos'?{t0:e.t0,t1:fimDeItem(e)}:e),{withNow:true});
+  render();
+};
 window.addEventListener('resize',()=>{ render(); positionPopover(); });
 
 // ---------- PAINEL LATERAL COLAPSÁVEL ----------
@@ -1650,7 +1906,7 @@ document.getElementById('loginEmail').onkeydown=ev=>{
     }
   }
 
-  buildChips(); syncFollow(); render(); renderList();
+  buildChips(); syncFollow(); pintarViews(); render(); renderList();
   if(first){
     await saveNow();
     showToast(MODO==='nuvem'
