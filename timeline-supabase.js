@@ -68,16 +68,24 @@ export function normalizeDoc(doc, semente) {
     return mapa.get(id);
   };
   const topics = (doc.topics || []).map(t => ({ ...t, id: trocar(t.id, 'trilha:' + t.id) }));
+  // Duas passadas: a primeira converte os ids das marcações, a segunda religa
+  // `pai`. Numa passada só, uma tarefa citada antes da mãe apontaria para o id
+  // antigo — e o insert falharia na chave estrangeira item_pai_id.
   const events = (doc.events || []).map(e => {
     const chave = `marcacao:${e.topic}:${e.t0}:${e.title}`;
     return {
       ...e,
       id: trocar(e.id, chave),
       topic: trocar(e.topic, 'trilha:' + e.topic),
+      _paiAntigo: e.pai || null,
       att: (e.att || []).map((a, i) =>
         ({ ...a, id: trocar(a.id, `${chave}:anexo:${a.url || a.name || i}`) }))
     };
   });
+  for (const e of events) {
+    e.pai = e._paiAntigo ? (mapa.get(e._paiAntigo) || e._paiAntigo) : null;
+    delete e._paiAntigo;
+  }
   const lanes = (doc.lanes || []).map(l => l.map(id => trocar(id, 'trilha:' + id))).filter(l => l.length);
   const off = (doc.off || []).map(id => trocar(id, 'trilha:' + id));
   return { ...doc, topics, events, lanes, off };
@@ -172,7 +180,14 @@ const linhaMarcacao = (e, uid) => ({
   titulo: e.title || '(sem título)',
   descricao: e.desc || null,
   tipo: e.kind || 'acontecimento',
-  estado: PARA_BANCO[e.status] || 'registrado'
+  estado: PARA_BANCO[e.status] || 'registrado',
+  // Visão de projetos. Numa marcação comum tudo isto é null, e a linha fica
+  // idêntica à de antes — inclusive para o diff, que compara por igualdade.
+  item_pai_id:    e.pai ?? null,
+  estado_item:    e.estadoItem ?? null,
+  estimativa_min: e.estimativaMin ?? null,
+  responsavel_id: e.responsavel ?? null,
+  entregue_em_ms: e.entregueEm ?? null
 });
 
 const linhaAnexo = (a, marcacaoId, uid) => {
@@ -229,7 +244,12 @@ export async function pullDoc() {
     status: PARA_APP[m.estado] || 'done',
     kind: m.tipo === 'acontecimento' ? '' : (m.tipo || ''),
     desc: m.descricao || '',
-    att: anexosPorMarcacao.get(m.id) || []
+    att: anexosPorMarcacao.get(m.id) || [],
+    pai:           m.item_pai_id ?? null,
+    estadoItem:    m.estado_item ?? null,
+    estimativaMin: m.estimativa_min ?? null,
+    responsavel:   m.responsavel_id ?? null,
+    entregueEm:    m.entregue_em_ms == null ? null : Number(m.entregue_em_ms)
   }));
 
   const topics = tr.data.map(t => ({ id: t.id, name: t.nome, color: t.cor }));
