@@ -293,6 +293,56 @@
   .bvazio{padding:26px 20px 26px 220px;color:var(--dim);font-size:12.5px;line-height:1.6}
   .bvazio b{color:var(--txt)}
 
+  /* ---- backlog (esquerda, só na visão de projetos) ---- */
+  #backlog{width:262px;flex:none;border-right:1px solid var(--line);background:var(--panel);
+    display:none;flex-direction:column;min-height:0;transition:width .18s ease}
+  #backlog.on{display:flex}
+  #backlog.collapsed{width:0;border-right-color:transparent;overflow:hidden}
+  #backlog.collapsed>*{display:none}
+  #backlogToggle{position:absolute;left:0;top:50%;transform:translateY(-50%);z-index:9;
+    width:17px;height:54px;padding:0;font-size:12px;line-height:1;color:var(--dim);
+    background:var(--panel);border:1px solid var(--line);border-left:0;
+    border-radius:0 7px 7px 0;cursor:pointer;display:none;align-items:center;
+    justify-content:center;opacity:.7;box-shadow:2px 0 8px rgba(0,0,0,.35);
+    transition:opacity .12s,color .12s,background .12s}
+  #backlogToggle.on{display:flex}
+  #backlogToggle:hover{opacity:1;color:var(--txt);background:#1e2634}
+  #bkForm{padding:10px 12px;border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:6px}
+  #bkForm input,#bkForm select{width:100%;background:#0f1420;border:1px solid #262e3d;
+    border-radius:6px;color:var(--txt);padding:6px 8px;font:inherit;font-size:12.5px}
+  #bkForm .dupla{display:flex;gap:6px}
+  #bkForm .dupla>*{flex:1;min-width:0}
+  #bkAdd{background:#2a3a5c;border-color:#4a68a8;color:#fff;font-weight:600;padding:7px}
+  #bkAdd:disabled{background:var(--panel);color:var(--dim);cursor:not-allowed}
+  #bkLista{flex:1;overflow:auto;padding:4px 0}
+  .bk{margin:6px 10px 0;padding:8px 10px;background:#161c28;border:1px solid #232b3a;
+    border-left:3px solid var(--c);border-radius:8px;cursor:pointer}
+  .bk:hover{border-color:#39425a;border-left-color:var(--c)}
+  .bk.sel{background:#1b2231;border-color:#6f86bb;border-left-color:var(--c)}
+  .bk .t{font-size:12.5px;color:#dde3ee}
+  .bk .m{font-size:10.5px;color:var(--dim);margin-top:3px;display:flex;align-items:center;gap:6px}
+  .bk .m b{color:#a9b2c4}
+  .bk .ag{margin-left:auto;background:none;border:1px solid #262e3d;color:var(--dim);
+    font-size:10px;padding:2px 7px;border-radius:5px}
+  .bk .ag:hover{color:var(--txt);border-color:#4a68a8}
+  .bk input[type=date]{margin-top:6px;width:100%;background:#0f1420;border:1px solid #4a68a8;
+    border-radius:5px;color:var(--txt);padding:4px 6px;font:inherit;font-size:11.5px}
+
+  /* ---- filtros da listagem ---- */
+  #filtros{display:none;gap:6px;padding:8px 12px;border-bottom:1px solid var(--line)}
+  #filtros.on{display:flex}
+  #filtros input,#filtros select{background:#0f1420;border:1px solid #262e3d;border-radius:6px;
+    color:var(--txt);padding:5px 7px;font:inherit;font-size:11.5px;min-width:0}
+  #filtros input{flex:1}
+  .item .est{font-size:10px;color:#6d7688;margin-left:5px;white-space:nowrap}
+  .item .tag{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;
+    padding:1px 5px;border-radius:4px;margin-left:5px;white-space:nowrap}
+  .tag.backlog{color:#8b95a5;background:rgba(139,149,165,.16)}
+  .tag.planejado{color:#b18cff;background:rgba(177,140,255,.16)}
+  .tag.andamento{color:#5aa9ff;background:rgba(90,169,255,.16)}
+  .tag.entregue{color:#3ecf8e;background:rgba(62,207,142,.16)}
+  .tag.atrasado{color:#ff8199;background:rgba(255,77,94,.18)}
+
   @media (prefers-reduced-motion:reduce){
   .nowdot{animation:none}
     .ghost{transition:opacity .2s}
@@ -349,6 +399,27 @@
   <div id="chips"><span class="chips-label">assuntos:</span></div>
 
   <div id="stage">
+    <aside id="backlog">
+      <div class="side-head">
+        <h2>Backlog</h2>
+        <span class="cnt" id="bkCount"></span>
+      </div>
+      <div id="bkForm">
+        <input id="bkTitulo" placeholder="Título do item…" autocomplete="off">
+        <div class="dupla">
+          <select id="bkTipo">
+            <option value="historia">História</option>
+            <option value="tarefa">Tarefa</option>
+          </select>
+          <select id="bkEstim"></select>
+        </div>
+        <select id="bkPai" style="display:none"></select>
+        <select id="bkTopic"></select>
+        <button id="bkAdd">+ Adicionar ao backlog</button>
+      </div>
+      <div id="bkLista"></div>
+    </aside>
+
     <div id="canvas">
       <div id="ruler"></div>
       <div id="layers"></div>
@@ -357,6 +428,8 @@
   <div id="laneDrop"></div>
   <div id="guide"></div><div id="guideLbl"></div>
       <div id="toast"><span class="msg"></span></div>
+      <button id="backlogToggle" type="button" title="Ocultar backlog (B)"
+              aria-label="Ocultar backlog" aria-expanded="true" aria-controls="backlog">‹</button>
       <button id="sideToggle" type="button" title="Ocultar painel (P)"
               aria-label="Ocultar painel" aria-expanded="true" aria-controls="side">›</button>
     </div>
@@ -366,6 +439,17 @@
         <h2 id="sideTitle">Tudo</h2>
         <span class="cnt" id="sideCount"></span>
         <button id="btnAdd" title="Novo item">+</button>
+      </div>
+      <div id="filtros">
+        <input id="flTexto" placeholder="filtrar…" autocomplete="off">
+        <select id="flEstado">
+          <option value="">todos</option>
+          <option value="backlog">backlog</option>
+          <option value="planejado">planejado</option>
+          <option value="andamento">em andamento</option>
+          <option value="entregue">entregue</option>
+          <option value="atrasado">atrasados</option>
+        </select>
       </div>
       <div id="list"></div>
     </div>
@@ -524,7 +608,7 @@ const state={ center:Date.now(), msPerPx:1000*60*60*24*3/100, follow:false,
   off:new Set(), lanes:null, selected:null, editorIn:'list',
   // visão atual e o que ela precisa lembrar. Fica no localStorage, não no doc:
   // é preferência deste navegador, não dado da linha do tempo.
-  view:'timeline', abertos:new Set(), itensNaLinha:false };
+  view:'timeline', abertos:new Set(), itensNaLinha:false, filtro:{texto:'',estado:''} };
 
 const canvas=document.getElementById('canvas'), ruler=document.getElementById('ruler'),
   layers=document.getElementById('layers'), nowEl=document.getElementById('now'),
@@ -895,9 +979,17 @@ function laneHtml(ids,li,n,w,now){
 // porque "uma linha por assunto" já era a ideia do app desde o começo.
 const boardEl=document.getElementById('board');
 const itens      = ()=>EVENTS.filter(ehItem);
-const historiasDe= tid=>itens().filter(e=>e.topic===tid&&!e.pai).sort((a,b)=>a.t0-b.t0);
-const tarefasDe  = id =>itens().filter(e=>e.pai===id).sort((a,b)=>a.t0-b.t0);
-const fimDeItem  = e =>e.entregueEm||e.t1||(e.t0+(e.estimativaMin||480)*60000);
+// No backlog o item ainda não tem lugar no tempo: o t0 existe (a coluna ts_ms é
+// obrigatória) mas é só um marcador provisório até alguém agendar.
+const noBacklog  = e=>e.estadoItem==='backlog';
+const agendados  = ()=>itens().filter(e=>!noBacklog(e));
+const historiasDe= tid=>agendados().filter(e=>e.topic===tid&&!e.pai).sort((a,b)=>a.t0-b.t0);
+const tarefasDe  = id =>agendados().filter(e=>e.pai===id).sort((a,b)=>a.t0-b.t0);
+// A previsão é ESFORÇO (480 min = 1 dia de trabalho). Na linha ela vira dias no
+// calendário: "1sem" é uma barra de 5 dias, não de 40 horas corridas.
+// (Dias corridos, não úteis — decisão registrada como em aberto no plano.)
+const diasDe     = min=>Math.max(1,Math.ceil((min||480)/480));
+const fimDeItem  = e =>e.entregueEm||e.t1||(e.t0+diasDe(e.estimativaMin)*DAY);
 const atrasado   = e =>e.estadoItem&&e.estadoItem!=='entregue'&&e.estadoItem!=='backlog'
                        &&fimDeItem(e)<Date.now();
 const fmtEstim   = min=>min<480?Math.round(min/60)+'h'
@@ -906,9 +998,12 @@ const fmtEstim   = min=>min<480?Math.round(min/60)+'h'
 function renderBoard(now){
   const comItens=TOPICS.filter(t=>isOn(t.id)&&historiasDe(t.id).length);
   if(!comItens.length){
-    boardEl.innerHTML=`<div class="bvazio">Nenhum item de projeto ainda.<br>
-      Use o <b>+</b> do painel para criar uma história — ela nasce no assunto ligado,
-      já planejada e com 1 dia de previsão.<br>
+    const noBk=backlogItens().length;
+    boardEl.innerHTML=`<div class="bvazio">Nada agendado na linha ainda.<br>
+      ${noBk?`Você tem <b>${noBk}</b> item(ns) no backlog à esquerda — use <b>Agendar</b> em um deles
+              para dar uma data e ele aparece aqui.`
+            :`Crie itens no <b>backlog</b>, à esquerda, e agende quando souber a data —
+              ou use o <b>+</b> do painel da direita para criar algo já planejado.`}<br>
       Épicos são os <b>assuntos</b> que você já tem; histórias e tarefas moram dentro deles.</div>`;
     return;
   }
@@ -972,11 +1067,123 @@ boardEl.addEventListener('click',ev=>{
   if(bar){ ev.stopPropagation(); select(bar.dataset.id,{center:false,where:'list'}); }
 });
 
+// ---------- BACKLOG ----------
+const bkEl=document.getElementById('backlog'), bkLista=document.getElementById('bkLista');
+const ESTIMS=[[120,'2h'],[240,'4h'],[480,'1d'],[960,'2d'],[1440,'3d'],[2400,'1sem'],[4800,'2sem']];
+const backlogItens=()=>itens().filter(e=>noBacklog(e)&&isOn(e.topic));
+
+function pintarFormBacklog(){
+  const tipo=document.getElementById('bkTipo').value;
+  const selPai=document.getElementById('bkPai'), selTopic=document.getElementById('bkTopic');
+  selTopic.innerHTML=TOPICS.map(t=>`<option value="${t.id}"${t.id===selTopic.value?' selected':''}>Épico: ${esc(t.name)}</option>`).join('');
+  // Tarefa nasce colada numa história; história nasce solta num épico.
+  const mostrarPai=tipo==='tarefa';
+  selPai.style.display=mostrarPai?'':'none';
+  if(mostrarPai){
+    const hs=itens().filter(h=>!h.pai);
+    selPai.innerHTML=hs.length
+      ? hs.map(h=>`<option value="${h.id}">História: ${esc(h.title)}</option>`).join('')
+      : '<option value="">— nenhuma história ainda —</option>';
+  }
+  document.getElementById('bkAdd').disabled = mostrarPai && !selPai.value;
+}
+
+function renderBacklog(){
+  if(state.view!=='projetos') return;
+  const lista=backlogItens();
+  document.getElementById('bkCount').textContent=lista.length+(lista.length===1?' item':' itens');
+  bkLista.innerHTML='';
+  if(!lista.length){
+    bkLista.innerHTML='<div class="empty">Nada no backlog.<br>Crie itens acima; eles esperam aqui até ganharem data.</div>';
+    return;
+  }
+  for(const e of lista){
+    const tp=topicOf(e.topic), mae=e.pai?evById(e.pai):null;
+    const d=document.createElement('div');
+    d.className='bk'+(state.selected===e.id?' sel':'');
+    d.style.setProperty('--c',tp.color);
+    d.dataset.id=e.id;
+    d.innerHTML=`<div class="t">${esc(e.title)}</div>
+      <div class="m"><span>${mae?'Tarefa · '+esc(mae.title):'História · '+esc(tp.name)} ·
+        <b>${fmtEstim(e.estimativaMin||480)}</b></span>
+        <button class="ag" type="button">Agendar ▸</button></div>`;
+    d.querySelector('.ag').onclick=ev=>{
+      ev.stopPropagation();
+      if(d.querySelector('input[type=date]')) return;
+      const inp=document.createElement('input');
+      inp.type='date';
+      inp.value=new Date(Date.now()-new Date().getTimezoneOffset()*60000).toISOString().slice(0,10);
+      inp.onclick=e2=>e2.stopPropagation();
+      inp.onchange=()=>{
+        if(!inp.value) return;
+        e.t0=D(inp.value+'T09:00');
+        e.t1=e.t0+diasDe(e.estimativaMin)*DAY;
+        e.estadoItem='planejado';
+        e.status='confirmed';
+        render(); renderList(); renderBacklog(); scheduleSave();
+      };
+      d.appendChild(inp); inp.focus();
+    };
+    d.onclick=()=>select(state.selected===e.id?null:e.id,{center:false,where:'list'});
+    bkLista.appendChild(d);
+  }
+}
+
+document.getElementById('bkTipo').onchange=pintarFormBacklog;
+document.getElementById('bkTopic').onchange=pintarFormBacklog;
+document.getElementById('bkPai').onchange=()=>{
+  document.getElementById('bkAdd').disabled=!document.getElementById('bkPai').value;
+};
+document.getElementById('bkTitulo').onkeydown=ev=>{
+  if(ev.key==='Enter'){ ev.preventDefault(); document.getElementById('bkAdd').click(); }
+};
+document.getElementById('bkAdd').onclick=()=>{
+  const titulo=document.getElementById('bkTitulo').value.trim();
+  if(!titulo){ document.getElementById('bkTitulo').focus(); return; }
+  const tipo=document.getElementById('bkTipo').value;
+  const pai=tipo==='tarefa'?document.getElementById('bkPai').value:null;
+  if(tipo==='tarefa'&&!pai) return;
+  const topic=pai ? (evById(pai)||{}).topic : document.getElementById('bkTopic').value;
+  const e=criarEvento({ topic, title:titulo, t0:Math.round(state.center), t1:null,
+    status:'tentative', estadoItem:'backlog', pai,
+    estimativaMin:+document.getElementById('bkEstim').value });
+  EVENTS.push(e);
+  document.getElementById('bkTitulo').value='';
+  pintarFormBacklog(); renderBacklog(); renderList(); render(); scheduleSave();
+};
+
+// ---- recolher o backlog (aba na borda + tecla B) ----
+const bkToggle=document.getElementById('backlogToggle');
+const BK_KEY='tl_backlog_fechado';
+const bkFechado=()=>bkEl.classList.contains('collapsed');
+function pintarBkToggle(){
+  const off=bkFechado();
+  bkToggle.textContent=off?'›':'‹';
+  bkToggle.title=(off?'Mostrar backlog':'Ocultar backlog')+' (B)';
+  bkToggle.setAttribute('aria-label',bkToggle.title);
+  bkToggle.setAttribute('aria-expanded',String(!off));
+}
+function toggleBacklog(fechar){
+  const alvo=(fechar===undefined)?!bkFechado():!!fechar;
+  if(alvo===bkFechado()){ pintarBkToggle(); return; }
+  bkEl.classList.toggle('collapsed',alvo);
+  try{ localStorage.setItem(BK_KEY,alvo?'1':'0'); }catch(_){}
+  pintarBkToggle(); redesenharDurante(240);
+}
+bkToggle.addEventListener('click',()=>toggleBacklog());
+bkToggle.addEventListener('mousedown',ev=>ev.stopPropagation());
+try{ if(localStorage.getItem(BK_KEY)==='1') bkEl.classList.add('collapsed'); }catch(_){}
+
 function pintarViews(){
+  const proj=state.view==='projetos';
   document.querySelectorAll('#views button').forEach(b=>
     b.classList.toggle('on',b.dataset.view===state.view));
-  boardEl.classList.toggle('on',state.view==='projetos');
-  document.getElementById('chips').style.display=state.view==='projetos'?'none':'';
+  boardEl.classList.toggle('on',proj);
+  bkEl.classList.toggle('on',proj);
+  bkToggle.classList.toggle('on',proj);
+  document.getElementById('filtros').classList.toggle('on',proj);
+  document.getElementById('chips').style.display=proj?'none':'';
+  if(proj){ pintarBkToggle(); pintarFormBacklog(); renderBacklog(); }
 }
 function trocarView(v){
   if(v===state.view) return;
@@ -988,6 +1195,12 @@ function trocarView(v){
 document.getElementById('views').addEventListener('click',ev=>{
   const b=ev.target.closest('button'); if(b) trocarView(b.dataset.view);
 });
+document.getElementById('flTexto').oninput=ev=>{
+  state.filtro.texto=ev.target.value.trim().toLowerCase(); renderList(); };
+document.getElementById('flEstado').onchange=ev=>{
+  state.filtro.estado=ev.target.value; renderList(); };
+document.getElementById('bkEstim').innerHTML=
+  ESTIMS.map(([v,r])=>`<option value="${v}"${v===480?' selected':''}>${r}</option>`).join('');
 try{ const v=localStorage.getItem('tl_view'); if(v==='projetos') state.view=v; }catch(_){}
 
 // ---------- LISTA + EDITOR ----------
@@ -999,7 +1212,12 @@ function toLocalInput(t){
 function renderList(){
   const now=Date.now();
   const proj=state.view==='projetos';
-  const evs=(proj?itens().filter(e=>isOn(e.topic)):visible()).slice().sort((a,b)=>a.t0-b.t0);
+  const f=state.filtro;
+  const passa=e=>!proj||(
+    (!f.texto||e.title.toLowerCase().includes(f.texto)) &&
+    (!f.estado||(f.estado==='atrasado'?atrasado(e):e.estadoItem===f.estado)));
+  const evs=(proj?itens().filter(e=>isOn(e.topic)):visible())
+    .filter(passa).slice().sort((a,b)=>a.t0-b.t0);
   const on=TOPICS.filter(t=>isOn(t.id));
   document.getElementById('sideTitle').textContent= proj ? 'Itens do projeto' :
   on.length===TOPICS.length?'Tudo':on.length===1?on[0].name:on.length?`${on.length} assuntos`:'Nada ligado';
@@ -1014,18 +1232,29 @@ function renderList(){
 
   let dividerDone=false;
   for(const e of evs){
-    if(!dividerDone&&e.t0>now){ listEl.insertAdjacentHTML('beforeend','<div class="divider">AGORA</div>'); dividerDone=true; }
+    // Na visão de projetos o divisor AGORA engana: item de backlog tem data
+    // provisória, então ele cairia num lado qualquer da linha sem querer dizer nada.
+    if(!proj&&!dividerDone&&e.t0>now){ listEl.insertAdjacentHTML('beforeend','<div class="divider">AGORA</div>'); dividerDone=true; }
     const c=topicOf(e.topic).color, past=e.t0<now?' past':'', tent=e.status==='tentative'?' tent':'';
     const sel=state.selected===e.id?' sel':'';
-    const when=e.t1?`${fmtFull(e.t0)} → ${fmtFull(e.t1)}`:fmtFull(e.t0);
+    const when=noBacklog(e)?'sem data — no backlog'
+      :e.t1?`${fmtFull(e.t0)} → ${fmtFull(e.t1)}`:fmtFull(e.t0);
     const clip=e.att.length?`<span class="clip">📎${e.att.length}</span>`:'';
+    const extra=proj&&ehItem(e)
+      ? `<span class="est">${fmtEstim(e.estimativaMin||480)}</span>`+
+        (atrasado(e)?'<span class="tag atrasado">atrasado</span>'
+                    :`<span class="tag ${e.estadoItem}">${e.estadoItem}</span>`)
+      : '';
     listEl.insertAdjacentHTML('beforeend',
       `<div class="item${past}${tent}${sel}" data-id="${e.id}" style="color:${c}">
          <span class="bul" style="background:${c}"></span>
-         <span><span class="ttl">${esc(e.title)}</span>${clip}<div class="sub">${when}</div></span></div>`);
+         <span><span class="ttl">${esc(e.title)}</span>${clip}${extra}<div class="sub">${when}</div></span></div>`);
     if(state.selected===e.id&&state.editorIn==='list') listEl.appendChild(buildEditor(e));
   }
-  if(!dividerDone) listEl.insertAdjacentHTML('beforeend','<div class="divider">AGORA</div>');
+  if(!proj&&!dividerDone) listEl.insertAdjacentHTML('beforeend','<div class="divider">AGORA</div>');
+  // Um só ponto de atualização do backlog: renderList já é chamado nos 19 lugares
+  // que mexem em item, então o painel da esquerda nunca fica desatualizado.
+  if(proj) renderBacklog();
 }
 
 function buildEditor(e){
@@ -1100,7 +1329,18 @@ function buildEditor(e){
   $('#eDesc').oninput=ev=>{ e.desc=ev.target.value; scheduleSave(); };
   $('#eStatus').onchange=ev=>{ e.status=ev.target.value; touch(); };
   $('#eStart').onchange=ev=>{ if(ev.target.value){ e.t0=D(ev.target.value); touch(); } };
-  $('#eEnd').onchange=ev=>{ e.t1=ev.target.value?D(ev.target.value):null; touch(); };
+  $('#eEnd').onchange=ev=>{
+    e.t1=ev.target.value?D(ev.target.value):null;
+    // item de projeto: a data de entrega escolhida à mão vira a previsão
+    if(ehItem(e)&&e.t1&&e.t1>e.t0){
+      e.estimativaMin=Math.max(1,Math.round((e.t1-e.t0)/DAY))*480;
+      const sel=$('#eEstim');
+      if(sel&&!sel.querySelector(`option[value="${e.estimativaMin}"]`))
+        sel.insertAdjacentHTML('beforeend',`<option value="${e.estimativaMin}">${fmtEstim(e.estimativaMin)}</option>`);
+      if(sel) sel.value=String(e.estimativaMin);
+    }
+    touch(); renderList();
+  };
   $('#eTopic').onchange=ev=>{
     if(ev.target.value==='__new'){
       const name=prompt('Nome do novo assunto:');
@@ -1119,10 +1359,13 @@ function buildEditor(e){
       e.entregueEm = e.estadoItem==='entregue' ? Date.now() : null;
       touch();
     };
+    // Previsão e Fim são as duas faces da mesma coisa, e cada um recalcula o
+    // outro: mexer na previsão move a entrega; mexer na entrega reescreve a
+    // previsão. É o "por duração ou por data" do protótipo, sem campo novo.
     $('#eEstim').onchange=ev=>{
       e.estimativaMin=+ev.target.value;
-      // Sem fim explícito, a barra é início + previsão: mexer na previsão move o fim.
-      touch();
+      e.t1=e.t0+diasDe(e.estimativaMin)*DAY;
+      touch(); renderList();
     };
     $('#ePai').onchange=ev=>{ e.pai=ev.target.value||null; touch(); };
   }
@@ -1773,6 +2016,8 @@ window.addEventListener('keydown',ev=>{
   if(ev.key==='ArrowLeft'){state.center-=W()*.2*state.msPerPx;state.follow=false;syncFollow();render();}
   if(ev.key==='ArrowRight'){state.center+=W()*.2*state.msPerPx;state.follow=false;syncFollow();render();}
   if((ev.key==='p'||ev.key==='P')&&!ev.ctrlKey&&!ev.metaKey&&!ev.altKey){ ev.preventDefault(); togglePainel(); }
+  if((ev.key==='b'||ev.key==='B')&&!ev.ctrlKey&&!ev.metaKey&&!ev.altKey&&state.view==='projetos'){
+    ev.preventDefault(); toggleBacklog(); }
   if(ev.key==='Escape'){ dataMenu.classList.remove('open');
     if(popEl) select(null,{where:'list'}); }
 });
